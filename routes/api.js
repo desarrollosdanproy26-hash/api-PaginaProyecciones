@@ -83,6 +83,12 @@ router.get('/fenologia/turnos/:idTurno/lotes', fenologiaController.getLotesByTur
 // Obtener datos de fenología por lote
 router.get('/fenologia/lotes/:idLote/datos', fenologiaController.getDatosFenologia);
 
+// Obtener promedios a nivel turno
+router.get('/fenologia/turnos/:idTurno/nivel-turno', fenologiaController.getDatosNivelTurno);
+
+// Obtener promedios a nivel lote
+router.get('/fenologia/lotes/:idLote/nivel-lote', fenologiaController.getDatosNivelLote);
+
 // Actualizar registro de fenología
 router.put('/fenologia/registros/:id', 
   authController.authorizeRoles('Asistente'),
