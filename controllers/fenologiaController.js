@@ -180,20 +180,23 @@ async function getDatosFenologia(req, res) {
           TBL.AltPlant as AlturaPlanta,
           TBL.N_bot as Botones,
           TBL.N_Flor as Flores,
-          TBL.N_FrtN1 as FrutoNivel1,
-          TBL.N_FrtN2 as FrutoNivel2,
-          TBL.N_FrtN3 as FrutoNivel3,
-          TBL.N_FrtN4 as FrutoNivel4,
-          TBL.N_FrtN5 as FrutoNivel5,
-          TBL.N_FrtN6 AS FrutoNivel6,
+          TBL.N_Cuajas as Cuajas,
+          TBL.N_PC as PreCuajas,
+          TBL.N_CDeforP as CuajaDeforme,
           TBL.N_CDA AS CuajasDañoAlternaria,
           TBL.N_CDP as CuajaDañoProdi,
-          TBL.N_CDeforP as CuajaDeforme,
-          TBL.N_PC as PreCuajas,
-          TBL.LarFru as LargoFruto,
-          TBL.AncFru as AnchoFruto,
-          TBL.Mad as Maduro,
-          TBL.Bif as Bifido
+          TBL.N_FrtN1 as FrutoNivel1,
+          TBL.N_FrtfQ as FrutosQuemados,
+          TBL.N_FrtFMD as FrutosDeformes,
+          TBL.N_FrtDeforL as DeformeLeve,
+          TBL.N_FrtTAPR as TipoAji,
+          TBL.N_FrtFA as FormaAji,
+          TBL.N_FrtDA as DañoAlternaria,
+          TBL.N_FrtDP as DañoProdiplosis,
+          TBL.N_FrtDescomp AS FrutosDescompuestos,
+          TBL.N_FrtDM AS DiametroMenor,
+          TBL.N_FrtDPR as DañoRoedores,
+          TBL.N_FrtDPP as DañoPajaros
         FROM TBL_ProyeccionesPimiento TBL 
         INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
         INNER JOIN Usuario U ON U.idUsuario = TBL.idUsuario
@@ -240,32 +243,53 @@ async function actualizarRegistro(req, res) {
 
     // Campos numéricos editables
     const camposEditables = [
-      'AlturaPlanta', 'Botones', 'Flores', 'FrutoNivel1', 'FrutoNivel2', 
-      'FrutoNivel3', 'FrutoNivel4', 'FrutoNivel5', 'FrutoNivel6',
-      'CuajasDañoAlternaria', 'CuajaDañoProdi', 'CuajaDeforme', 'PreCuajas',
-      'LargoFruto', 'AnchoFruto', 'Maduro', 'Bifido'
-    ];
+  'AlturaPlanta',
+  'Botones',
+  'Flores',
+  'Cuajas',
+  'PreCuajas',
+  'CuajaDeforme',
+  'CuajasDañoAlternaria',
+  'CuajaDañoProdi',
+  'FrutoNivel1',
+  'FrutosQuemados',
+  'FrutosDeformes',
+  'DeformeLeve',
+  'TipoAji',
+  'FormaAji',
+  'DañoAlternaria',
+  'DañoProdiplosis',
+  'FrutosDescompuestos',
+  'DiametroMenor',
+  'DañoRoedores',
+  'DañoPajaros'
+];
+
 
     // Mapeo de nombres frontend a nombres de BD
     const mapeoColumnas = {
-      'AlturaPlanta': 'AltPlant',
-      'Botones': 'N_bot',
-      'Flores': 'N_Flor',
-      'FrutoNivel1': 'N_FrtN1',
-      'FrutoNivel2': 'N_FrtN2',
-      'FrutoNivel3': 'N_FrtN3',
-      'FrutoNivel4': 'N_FrtN4',
-      'FrutoNivel5': 'N_FrtN5',
-      'FrutoNivel6': 'N_FrtN6',
-      'CuajasDañoAlternaria': 'N_CDA',
-      'CuajaDañoProdi': 'N_CDP',
-      'CuajaDeforme': 'N_CDeforP',
-      'PreCuajas': 'N_PC',
-      'LargoFruto': 'LarFru',
-      'AnchoFruto': 'AncFru',
-      'Maduro': 'Mad',
-      'Bifido': 'Bif'
-    };
+  AlturaPlanta: 'AltPlant',
+  Botones: 'N_bot',
+  Flores: 'N_Flor',
+  Cuajas: 'N_Cuajas',
+  PreCuajas: 'N_PC',
+  CuajaDeforme: 'N_CDeforP',
+  CuajasDañoAlternaria: 'N_CDA',
+  CuajaDañoProdi: 'N_CDP',
+  FrutoNivel1: 'N_FrtN1',
+  FrutosQuemados: 'N_FrtfQ',
+  FrutosDeformes: 'N_FrtFMD',
+  DeformeLeve: 'N_FrtDeforL',
+  TipoAji: 'N_FrtTAPR',
+  FormaAji: 'N_FrtFA',
+  DañoAlternaria: 'N_FrtDA',
+  DañoProdiplosis: 'N_FrtDP',
+  FrutosDescompuestos: 'N_FrtDescomp',
+  DiametroMenor: 'N_FrtDM',
+  DañoRoedores: 'N_FrtDPR',
+  DañoPajaros: 'N_FrtDPP'
+};
+
 
     // Construir query UPDATE dinámicamente
     const setClauses = [];
@@ -312,11 +336,28 @@ function calcularPromedios(datos) {
   if (datos.length === 0) return {};
 
   const camposNumericos = [
-    'AlturaPlanta', 'Botones', 'Flores', 'FrutoNivel1', 'FrutoNivel2',
-    'FrutoNivel3', 'FrutoNivel4', 'FrutoNivel5', 'FrutoNivel6',
-    'CuajasDañoAlternaria', 'CuajaDañoProdi', 'CuajaDeforme', 'PreCuajas',
-    'LargoFruto', 'AnchoFruto', 'Maduro', 'Bifido'
-  ];
+  'AlturaPlanta',
+  'Botones',
+  'Flores',
+  'Cuajas',
+  'PreCuajas',
+  'CuajaDeforme',
+  'CuajasDañoAlternaria',
+  'CuajaDañoProdi',
+  'FrutoNivel1',
+  'FrutosQuemados',
+  'FrutosDeformes',
+  'DeformeLeve',
+  'TipoAji',
+  'FormaAji',
+  'DañoAlternaria',
+  'DañoProdiplosis',
+  'FrutosDescompuestos',
+  'DiametroMenor',
+  'DañoRoedores',
+  'DañoPajaros'
+];
+
 
   const promedios = {};
 
@@ -401,20 +442,23 @@ async function getDatosNivelTurno(req, res) {
           TBL.AltPlant as AlturaPlanta,
           TBL.N_bot as Botones,
           TBL.N_Flor as Flores,
-          TBL.N_FrtN1 as FrutoNivel1,
-          TBL.N_FrtN2 as FrutoNivel2,
-          TBL.N_FrtN3 as FrutoNivel3,
-          TBL.N_FrtN4 as FrutoNivel4,
-          TBL.N_FrtN5 as FrutoNivel5,
-          TBL.N_FrtN6 AS FrutoNivel6,
+          TBL.N_Cuajas as Cuajas,
+          TBL.N_PC as PreCuajas,
+          TBL.N_CDeforP as CuajaDeforme,
           TBL.N_CDA AS CuajasDañoAlternaria,
           TBL.N_CDP as CuajaDañoProdi,
-          TBL.N_CDeforP as CuajaDeforme,
-          TBL.N_PC as PreCuajas,
-          TBL.LarFru as LargoFruto,
-          TBL.AncFru as AnchoFruto,
-          TBL.Mad as Maduro,
-          TBL.Bif as Bifido
+          TBL.N_FrtN1 as FrutoNivel1,
+          TBL.N_FrtfQ as FrutosQuemados,
+          TBL.N_FrtFMD as FrutosDeformes,
+          TBL.N_FrtDeforL as DeformeLeve,
+          TBL.N_FrtTAPR as TipoAji,
+          TBL.N_FrtFA as FormaAji,
+          TBL.N_FrtDA as DañoAlternaria,
+          TBL.N_FrtDP as DañoProdiplosis,
+          TBL.N_FrtDescomp AS FrutosDescompuestos,
+          TBL.N_FrtDM AS DiametroMenor,
+          TBL.N_FrtDPR as DañoRoedores,
+          TBL.N_FrtDPP as DañoPajaros
         FROM TBL_ProyeccionesPimiento TBL 
         INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
         INNER JOIN Lote L ON L.idLote = TBL.idLote
@@ -507,20 +551,23 @@ async function getDatosNivelLote(req, res) {
           TBL.AltPlant as AlturaPlanta,
           TBL.N_bot as Botones,
           TBL.N_Flor as Flores,
-          TBL.N_FrtN1 as FrutoNivel1,
-          TBL.N_FrtN2 as FrutoNivel2,
-          TBL.N_FrtN3 as FrutoNivel3,
-          TBL.N_FrtN4 as FrutoNivel4,
-          TBL.N_FrtN5 as FrutoNivel5,
-          TBL.N_FrtN6 AS FrutoNivel6,
+          TBL.N_Cuajas as Cuajas,
+          TBL.N_PC as PreCuajas,
+          TBL.N_CDeforP as CuajaDeforme,
           TBL.N_CDA AS CuajasDañoAlternaria,
           TBL.N_CDP as CuajaDañoProdi,
-          TBL.N_CDeforP as CuajaDeforme,
-          TBL.N_PC as PreCuajas,
-          TBL.LarFru as LargoFruto,
-          TBL.AncFru as AnchoFruto,
-          TBL.Mad as Maduro,
-          TBL.Bif as Bifido
+          TBL.N_FrtN1 as FrutoNivel1,
+          TBL.N_FrtfQ as FrutosQuemados,
+          TBL.N_FrtFMD as FrutosDeformes,
+          TBL.N_FrtDeforL as DeformeLeve,
+          TBL.N_FrtTAPR as TipoAji,
+          TBL.N_FrtFA as FormaAji,
+          TBL.N_FrtDA as DañoAlternaria,
+          TBL.N_FrtDP as DañoProdiplosis,
+          TBL.N_FrtDescomp AS FrutosDescompuestos,
+          TBL.N_FrtDM AS DiametroMenor,
+          TBL.N_FrtDPR as DañoRoedores,
+          TBL.N_FrtDPP as DañoPajaros
         FROM TBL_ProyeccionesPimiento TBL 
         INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
         WHERE TBL.idLote = @idLote 
