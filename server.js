@@ -17,14 +17,11 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 
 // CORS - Permitir peticiones desde el frontend
-//app.use(cors({
-//  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-//  credentials: true
-//}));
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://portal-web-proyecciones-frontpagina-swik-cabe34-147-93-190-116.traefik.me',
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
+
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
