@@ -11,7 +11,7 @@ const { errorHandler, notFound, requestLogger } = require('./middleware/errorHan
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ==================== MIDDLEWARES ====================
+// ==================== Mcd backendIDDLEWARES ====================
 
 // Seguridad HTTP
 app.use(helmet());

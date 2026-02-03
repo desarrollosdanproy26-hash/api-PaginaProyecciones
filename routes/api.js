@@ -5,6 +5,7 @@ const authController = require('../controllers/authController');
 const fenologiaController = require('../controllers/fenologiaController');
 const conteoFrutosController = require('../controllers/conteoFrutosController');
 
+
 // ==================== RUTAS DE AUTENTICACIÓN ====================
 
 // Login (pública)
@@ -117,6 +118,8 @@ router.put('/conteo-frutos/registros/:id',
   authController.authorizeRoles('Asistente'),
   conteoFrutosController.actualizarRegistro
 );
+
+router.put('/fenologia/lotes/:idLote/cambiar-validacion', fenologiaController.cambiarValidacionLote);
 
 // ==================== RUTAS ESPECIALES ====================
 

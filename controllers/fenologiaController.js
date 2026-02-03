@@ -22,22 +22,32 @@ async function getFundos(req, res) {
   }
 }
 
-/**
- * Obtener módulos por fundo (OPTIMIZADO)
- */
 async function getModulosByFundo(req, res) {
   try {
     const { idFundo } = req.params;
     const pool = await getConnection();
     
     const result = await pool.request()
-      .input('idFundo', sql.Int, idFundo)
-      .query(`
-        SELECT idModulo, Modulo
-        FROM Modulo
-        WHERE idFundo = @idFundo
-        ORDER BY Modulo
-      `);
+  .input('idFundo', sql.Int, idFundo)
+  .query(`
+    SELECT 
+        m.idModulo, 
+        m.Modulo,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM Turno t
+                INNER JOIN Lote l ON l.idTurno = t.idTurno
+                INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+                WHERE t.idModulo = m.idModulo 
+                AND p.Validacion = 2
+            ) THEN 'rojo'
+            ELSE 'verde'
+        END AS Color
+    FROM Modulo m
+    WHERE m.idFundo = @idFundo
+    ORDER BY m.Modulo
+  `);
 
     res.json({
       success: true,
@@ -49,22 +59,32 @@ async function getModulosByFundo(req, res) {
   }
 }
 
-/**
- * Obtener turnos por módulo (OPTIMIZADO)
- */
 async function getTurnosByModulo(req, res) {
   try {
     const { idModulo } = req.params;
     const pool = await getConnection();
     
     const result = await pool.request()
-      .input('idModulo', sql.Int, idModulo)
-      .query(`
-        SELECT idTurno, Turno, SubTurno
-        FROM Turno
-        WHERE idModulo = @idModulo
-        ORDER BY Turno, SubTurno
-      `);
+  .input('idModulo', sql.Int, idModulo)
+  .query(`
+    SELECT 
+        t.idTurno, 
+        t.Turno, 
+        t.SubTurno,
+        CASE 
+            WHEN EXISTS (
+                SELECT 1 
+                FROM Lote l
+                INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+                WHERE l.idTurno = t.idTurno 
+                AND p.Validacion = 2
+            ) THEN 'rojo'
+            ELSE 'verde'
+        END AS Color
+    FROM Turno t
+    WHERE t.idModulo = @idModulo
+    ORDER BY t.Turno, t.SubTurno
+  `);
 
     res.json({
       success: true,
@@ -75,32 +95,30 @@ async function getTurnosByModulo(req, res) {
     res.status(500).json({ success: false, error: err.message });
   }
 }
-
-/**
- * Obtener lotes por turno (OPTIMIZADO - SOLO 2 JOINS)
- */
 async function getLotesByTurno(req, res) {
   try {
     const { idTurno } = req.params;
     const pool = await getConnection();
     
     const result = await pool.request()
-      .input('idTurno', sql.Int, idTurno)
-      .query(`
-        SELECT 
-          L.idLote, 
-          L.Lote,
-          V.Variedad,
-          V.SubVariedad,
-          T.Densidad,
-          T.Vivero,
-          T.Nro_Hileras
-        FROM Lote L
-        INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
-        INNER JOIN Turno T ON T.idTurno = L.idTurno
-        WHERE L.idTurno = @idTurno
-        ORDER BY L.Lote
-      `);
+  .input('idTurno', sql.Int, idTurno)
+  .query(`
+    SELECT 
+      L.idLote, 
+      L.Lote,
+      V.Variedad,
+      CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM TBL_ProyeccionesPimiento P 
+            WHERE P.idLote = L.idLote AND P.Validacion = 2
+        ) THEN 'rojo'
+        ELSE 'verde'
+      END AS Color
+    FROM Lote L
+    INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
+    WHERE L.idTurno = @idTurno
+    ORDER BY L.Lote
+  `);
 
     res.json({
       success: true,
@@ -430,7 +448,7 @@ async function getDatosNivelTurno(req, res) {
     const ultimaSemana = semanas[0];
     const penultimaSemana = semanas[1] || semanas[0];
     
-    // PASO 3: Obtener TODOS los datos del turno para calcular promedios
+    // PASO 3: Obtener datos AGRUPADOS por lote
     const result = await pool.request()
       .input('idTurno', sql.Int, idTurno)
       .input('maxAnio', sql.Int, maxAnio)
@@ -439,6 +457,9 @@ async function getDatosNivelTurno(req, res) {
       .query(`
         SELECT 
           DATEPART(iso_week, TBL.Fecha) as Semana,
+          TBL.Fecha,
+          L.idLote,
+          L.Lote,
           TBL.AltPlant as AlturaPlanta,
           TBL.N_bot as Botones,
           TBL.N_Flor as Flores,
@@ -466,21 +487,54 @@ async function getDatosNivelTurno(req, res) {
           AND E.Evaluacion = 'Fenologia'
           AND YEAR(TBL.Fecha) = @maxAnio
           AND DATEPART(iso_week, TBL.Fecha) IN (@semana1, @semana2)
+        ORDER BY L.Lote, DATEPART(iso_week, TBL.Fecha)
       `);
     
-    // Separar y calcular promedios por semana
+    // Separar por semana
     const datosUltimaSemana = result.recordset.filter(r => r.Semana === ultimaSemana);
     const datosPenultimaSemana = result.recordset.filter(r => r.Semana === penultimaSemana);
+    
+    // Agrupar por lote y calcular promedios
+    const agruparPorLote = (datos) => {
+      const lotes = {};
+      datos.forEach(registro => {
+        if (!lotes[registro.idLote]) {
+          lotes[registro.idLote] = {
+            idLote: registro.idLote,
+            Lote: registro.Lote,
+            datos: []
+          };
+        }
+        lotes[registro.idLote].datos.push(registro);
+      });
+      
+      // Calcular promedios por lote
+      return Object.values(lotes).map(lote => ({
+        idLote: lote.idLote,
+        Lote: lote.Lote,
+        fecha: lote.datos[0]?.Fecha || null,
+        promedios: calcularPromedios(lote.datos)
+      }));
+    };
+    
+    const lotesPenultimaSemana = agruparPorLote(datosPenultimaSemana);
+    const lotesUltimaSemana = agruparPorLote(datosUltimaSemana);
+    
+    // Calcular promedio GENERAL del turno
+    const promedioGeneralPenultima = calcularPromedios(datosPenultimaSemana);
+    const promedioGeneralUltima = calcularPromedios(datosUltimaSemana);
     
     res.json({
       success: true,
       ultimaSemana: {
         semana: ultimaSemana,
-        promedios: calcularPromedios(datosUltimaSemana)
+        lotes: lotesUltimaSemana,
+        promedioGeneral: promedioGeneralUltima
       },
       penultimaSemana: {
         semana: penultimaSemana,
-        promedios: calcularPromedios(datosPenultimaSemana)
+        lotes: lotesPenultimaSemana,
+        promedioGeneral: promedioGeneralPenultima
       }
     });
   } catch (err) {
@@ -488,6 +542,7 @@ async function getDatosNivelTurno(req, res) {
     res.status(500).json({ success: false, error: err.message });
   }
 }
+
 /**
  * Obtener promedios a NIVEL LOTE (todas las muestras del lote) - últimas 2 semanas
  */
@@ -548,6 +603,8 @@ async function getDatosNivelLote(req, res) {
       .query(`
         SELECT 
           DATEPART(iso_week, TBL.Fecha) as Semana,
+          TBL.Fecha,
+          L.Lote,
           TBL.AltPlant as AlturaPlanta,
           TBL.N_bot as Botones,
           TBL.N_Flor as Flores,
@@ -570,6 +627,7 @@ async function getDatosNivelLote(req, res) {
           TBL.N_FrtDPP as DañoPajaros
         FROM TBL_ProyeccionesPimiento TBL 
         INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
         WHERE TBL.idLote = @idLote 
           AND E.Evaluacion = 'Fenologia'
           AND YEAR(TBL.Fecha) = @maxAnio
@@ -579,6 +637,24 @@ async function getDatosNivelLote(req, res) {
     // Separar y calcular promedios por semana
     const datosUltimaSemana = result.recordset.filter(r => r.Semana === ultimaSemana);
     const datosPenultimaSemana = result.recordset.filter(r => r.Semana === penultimaSemana);
+
+    // Verificar si hay datos con Validacion=2
+    const validacionResult = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
+      .input('semana1', sql.Int, ultimaSemana)
+      .query(`
+        SELECT COUNT(*) as Total
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        WHERE TBL.idLote = @idLote 
+          AND E.Evaluacion = 'Fenologia'
+          AND YEAR(TBL.Fecha) = @maxAnio
+          AND DATEPART(iso_week, TBL.Fecha) = @semana1
+          AND TBL.Validacion = 2
+      `);
+    
+    const tieneValidacion2 = validacionResult.recordset[0].Total > 0;
     
     res.json({
       success: true,
@@ -596,6 +672,33 @@ async function getDatosNivelLote(req, res) {
     res.status(500).json({ success: false, error: err.message });
   }
 }
+
+async function cambiarValidacionLote(req, res) {
+  try {
+    const { idLote } = req.params;
+    const { validacionNueva } = req.body;
+    
+    const pool = await getConnection();
+    
+    await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('validacionNueva', sql.Int, validacionNueva)
+      .query(`
+        UPDATE TBL_ProyeccionesPimiento
+        SET Validacion = @validacionNueva
+        WHERE idLote = @idLote AND Validacion = 2
+      `);
+    
+    res.json({
+      success: true,
+      message: 'Validación actualizada correctamente'
+    });
+  } catch (err) {
+    console.error('❌ Error al cambiar validación:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
 module.exports = {
   getFundos,
   getModulosByFundo,
@@ -604,5 +707,6 @@ module.exports = {
   getDatosFenologia,
   actualizarRegistro,
   getDatosNivelTurno,
-  getDatosNivelLote
+  getDatosNivelLote,
+  cambiarValidacionLote
 };
