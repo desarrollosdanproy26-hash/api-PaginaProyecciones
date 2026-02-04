@@ -28,26 +28,26 @@ async function getModulosByFundo(req, res) {
     const pool = await getConnection();
     
     const result = await pool.request()
-  .input('idFundo', sql.Int, idFundo)
-  .query(`
-    SELECT 
-        m.idModulo, 
-        m.Modulo,
-        CASE 
-            WHEN EXISTS (
-                SELECT 1 
-                FROM Turno t
-                INNER JOIN Lote l ON l.idTurno = t.idTurno
-                INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
-                WHERE t.idModulo = m.idModulo 
-                AND p.Validacion = 2
-            ) THEN 'rojo'
-            ELSE 'verde'
-        END AS Color
-    FROM Modulo m
-    WHERE m.idFundo = @idFundo
-    ORDER BY m.Modulo
-  `);
+      .input('idFundo', sql.Int, idFundo)
+      .query(`
+        SELECT 
+            m.idModulo, 
+            m.Modulo,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM Turno t
+                    INNER JOIN Lote l ON l.idTurno = t.idTurno
+                    INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+                    WHERE t.idModulo = m.idModulo 
+                    AND p.Validacion = 2
+                ) THEN 'rojo'
+                ELSE 'verde'
+            END AS Color
+        FROM Modulo m
+        WHERE m.idFundo = @idFundo
+        ORDER BY m.Modulo
+      `);
 
     res.json({
       success: true,
@@ -65,26 +65,26 @@ async function getTurnosByModulo(req, res) {
     const pool = await getConnection();
     
     const result = await pool.request()
-  .input('idModulo', sql.Int, idModulo)
-  .query(`
-    SELECT 
-        t.idTurno, 
-        t.Turno, 
-        t.SubTurno,
-        CASE 
-            WHEN EXISTS (
-                SELECT 1 
-                FROM Lote l
-                INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
-                WHERE l.idTurno = t.idTurno 
-                AND p.Validacion = 2
-            ) THEN 'rojo'
-            ELSE 'verde'
-        END AS Color
-    FROM Turno t
-    WHERE t.idModulo = @idModulo
-    ORDER BY t.Turno, t.SubTurno
-  `);
+      .input('idModulo', sql.Int, idModulo)
+      .query(`
+        SELECT 
+            t.idTurno, 
+            t.Turno, 
+            t.SubTurno,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM Lote l
+                    INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+                    WHERE l.idTurno = t.idTurno 
+                    AND p.Validacion = 2
+                ) THEN 'rojo'
+                ELSE 'verde'
+            END AS Color
+        FROM Turno t
+        WHERE t.idModulo = @idModulo
+        ORDER BY t.Turno, t.SubTurno
+      `);
 
     res.json({
       success: true,
@@ -95,30 +95,31 @@ async function getTurnosByModulo(req, res) {
     res.status(500).json({ success: false, error: err.message });
   }
 }
+
 async function getLotesByTurno(req, res) {
   try {
     const { idTurno } = req.params;
     const pool = await getConnection();
     
     const result = await pool.request()
-  .input('idTurno', sql.Int, idTurno)
-  .query(`
-    SELECT 
-      L.idLote, 
-      L.Lote,
-      V.Variedad,
-      CASE 
-        WHEN EXISTS (
-            SELECT 1 FROM TBL_ProyeccionesPimiento P 
-            WHERE P.idLote = L.idLote AND P.Validacion = 2
-        ) THEN 'rojo'
-        ELSE 'verde'
-      END AS Color
-    FROM Lote L
-    INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
-    WHERE L.idTurno = @idTurno
-    ORDER BY L.Lote
-  `);
+      .input('idTurno', sql.Int, idTurno)
+      .query(`
+        SELECT 
+          L.idLote, 
+          L.Lote,
+          V.Variedad,
+          CASE 
+            WHEN EXISTS (
+                SELECT 1 FROM TBL_ProyeccionesPimiento P 
+                WHERE P.idLote = L.idLote AND P.Validacion = 2
+            ) THEN 'rojo'
+            ELSE 'verde'
+          END AS Color
+        FROM Lote L
+        INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
+        WHERE L.idTurno = @idTurno
+        ORDER BY L.Lote
+      `);
 
     res.json({
       success: true,
@@ -250,7 +251,8 @@ async function getDatosFenologia(req, res) {
 }
 
 /**
- * Actualizar registro de fenología (solo última semana)
+ * Actualizar registro de fenología
+ * ✅ AHORA CAMBIA VALIDACION DE 2 A 1 AL EDITAR
  */
 async function actualizarRegistro(req, res) {
   try {
@@ -261,53 +263,51 @@ async function actualizarRegistro(req, res) {
 
     // Campos numéricos editables
     const camposEditables = [
-  'AlturaPlanta',
-  'Botones',
-  'Flores',
-  'Cuajas',
-  'PreCuajas',
-  'CuajaDeforme',
-  'CuajasDañoAlternaria',
-  'CuajaDañoProdi',
-  'FrutoNivel1',
-  'FrutosQuemados',
-  'FrutosDeformes',
-  'DeformeLeve',
-  'TipoAji',
-  'FormaAji',
-  'DañoAlternaria',
-  'DañoProdiplosis',
-  'FrutosDescompuestos',
-  'DiametroMenor',
-  'DañoRoedores',
-  'DañoPajaros'
-];
-
+      'AlturaPlanta',
+      'Botones',
+      'Flores',
+      'Cuajas',
+      'PreCuajas',
+      'CuajaDeforme',
+      'CuajasDañoAlternaria',
+      'CuajaDañoProdi',
+      'FrutoNivel1',
+      'FrutosQuemados',
+      'FrutosDeformes',
+      'DeformeLeve',
+      'TipoAji',
+      'FormaAji',
+      'DañoAlternaria',
+      'DañoProdiplosis',
+      'FrutosDescompuestos',
+      'DiametroMenor',
+      'DañoRoedores',
+      'DañoPajaros'
+    ];
 
     // Mapeo de nombres frontend a nombres de BD
     const mapeoColumnas = {
-  AlturaPlanta: 'AltPlant',
-  Botones: 'N_bot',
-  Flores: 'N_Flor',
-  Cuajas: 'N_Cuajas',
-  PreCuajas: 'N_PC',
-  CuajaDeforme: 'N_CDeforP',
-  CuajasDañoAlternaria: 'N_CDA',
-  CuajaDañoProdi: 'N_CDP',
-  FrutoNivel1: 'N_FrtN1',
-  FrutosQuemados: 'N_FrtfQ',
-  FrutosDeformes: 'N_FrtFMD',
-  DeformeLeve: 'N_FrtDeforL',
-  TipoAji: 'N_FrtTAPR',
-  FormaAji: 'N_FrtFA',
-  DañoAlternaria: 'N_FrtDA',
-  DañoProdiplosis: 'N_FrtDP',
-  FrutosDescompuestos: 'N_FrtDescomp',
-  DiametroMenor: 'N_FrtDM',
-  DañoRoedores: 'N_FrtDPR',
-  DañoPajaros: 'N_FrtDPP'
-};
-
+      AlturaPlanta: 'AltPlant',
+      Botones: 'N_bot',
+      Flores: 'N_Flor',
+      Cuajas: 'N_Cuajas',
+      PreCuajas: 'N_PC',
+      CuajaDeforme: 'N_CDeforP',
+      CuajasDañoAlternaria: 'N_CDA',
+      CuajaDañoProdi: 'N_CDP',
+      FrutoNivel1: 'N_FrtN1',
+      FrutosQuemados: 'N_FrtfQ',
+      FrutosDeformes: 'N_FrtFMD',
+      DeformeLeve: 'N_FrtDeforL',
+      TipoAji: 'N_FrtTAPR',
+      FormaAji: 'N_FrtFA',
+      DañoAlternaria: 'N_FrtDA',
+      DañoProdiplosis: 'N_FrtDP',
+      FrutosDescompuestos: 'N_FrtDescomp',
+      DiametroMenor: 'N_FrtDM',
+      DañoRoedores: 'N_FrtDPR',
+      DañoPajaros: 'N_FrtDPP'
+    };
 
     // Construir query UPDATE dinámicamente
     const setClauses = [];
@@ -329,6 +329,9 @@ async function actualizarRegistro(req, res) {
       });
     }
 
+    // ✅ AGREGAR: Cambiar Validacion a 1 al editar
+    setClauses.push('Validacion = 1');
+
     const query = `
       UPDATE TBL_ProyeccionesPimiento
       SET ${setClauses.join(', ')}
@@ -339,7 +342,7 @@ async function actualizarRegistro(req, res) {
 
     res.json({
       success: true,
-      message: 'Registro actualizado correctamente'
+      message: 'Registro actualizado correctamente (Validacion cambiada a 1)'
     });
   } catch (err) {
     console.error('❌ Error al actualizar registro:', err.message);
@@ -354,28 +357,27 @@ function calcularPromedios(datos) {
   if (datos.length === 0) return {};
 
   const camposNumericos = [
-  'AlturaPlanta',
-  'Botones',
-  'Flores',
-  'Cuajas',
-  'PreCuajas',
-  'CuajaDeforme',
-  'CuajasDañoAlternaria',
-  'CuajaDañoProdi',
-  'FrutoNivel1',
-  'FrutosQuemados',
-  'FrutosDeformes',
-  'DeformeLeve',
-  'TipoAji',
-  'FormaAji',
-  'DañoAlternaria',
-  'DañoProdiplosis',
-  'FrutosDescompuestos',
-  'DiametroMenor',
-  'DañoRoedores',
-  'DañoPajaros'
-];
-
+    'AlturaPlanta',
+    'Botones',
+    'Flores',
+    'Cuajas',
+    'PreCuajas',
+    'CuajaDeforme',
+    'CuajasDañoAlternaria',
+    'CuajaDañoProdi',
+    'FrutoNivel1',
+    'FrutosQuemados',
+    'FrutosDeformes',
+    'DeformeLeve',
+    'TipoAji',
+    'FormaAji',
+    'DañoAlternaria',
+    'DañoProdiplosis',
+    'FrutosDescompuestos',
+    'DiametroMenor',
+    'DañoRoedores',
+    'DañoPajaros'
+  ];
 
   const promedios = {};
 
@@ -544,7 +546,8 @@ async function getDatosNivelTurno(req, res) {
 }
 
 /**
- * Obtener promedios a NIVEL LOTE (todas las muestras del lote) - últimas 2 semanas
+ * Obtener promedios a NIVEL LOTE
+ * ✅ AHORA ENVÍA esEditable = TRUE si TODOS los registros tienen Validacion = 2
  */
 async function getDatosNivelLote(req, res) {
   try {
@@ -565,6 +568,7 @@ async function getDatosNivelLote(req, res) {
     if (!maxAnio) {
       return res.json({
         success: true,
+        esEditable: false,
         ultimaSemana: { semana: null, promedios: {} },
         penultimaSemana: { semana: null, promedios: {} }
       });
@@ -585,6 +589,7 @@ async function getDatosNivelLote(req, res) {
     if (semanasResult.recordset.length === 0) {
       return res.json({
         success: true,
+        esEditable: false,
         ultimaSemana: { semana: null, promedios: {} },
         penultimaSemana: { semana: null, promedios: {} }
       });
@@ -638,26 +643,29 @@ async function getDatosNivelLote(req, res) {
     const datosUltimaSemana = result.recordset.filter(r => r.Semana === ultimaSemana);
     const datosPenultimaSemana = result.recordset.filter(r => r.Semana === penultimaSemana);
 
-    // Verificar si hay datos con Validacion=2
+    // ✅ VERIFICAR: ¿TODOS los registros de la última semana tienen Validacion=2?
     const validacionResult = await pool.request()
       .input('idLote', sql.Int, idLote)
       .input('maxAnio', sql.Int, maxAnio)
       .input('semana1', sql.Int, ultimaSemana)
       .query(`
-        SELECT COUNT(*) as Total
+        SELECT 
+          COUNT(*) as Total,
+          SUM(CASE WHEN TBL.Validacion = 2 THEN 1 ELSE 0 END) as TotalValidados
         FROM TBL_ProyeccionesPimiento TBL
         INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
         WHERE TBL.idLote = @idLote 
           AND E.Evaluacion = 'Fenologia'
           AND YEAR(TBL.Fecha) = @maxAnio
           AND DATEPART(iso_week, TBL.Fecha) = @semana1
-          AND TBL.Validacion = 2
       `);
     
-    const tieneValidacion2 = validacionResult.recordset[0].Total > 0;
+    const resultado = validacionResult.recordset[0];
+    const todosValidados = resultado.Total > 0 && resultado.Total === resultado.TotalValidados;
     
     res.json({
       success: true,
+      esEditable: todosValidados, // ✅ TRUE si todos tienen Validacion=2
       ultimaSemana: {
         semana: ultimaSemana,
         promedios: calcularPromedios(datosUltimaSemana)
@@ -673,6 +681,10 @@ async function getDatosNivelLote(req, res) {
   }
 }
 
+/**
+ * Cambiar validación de lote
+ * Esta función cambia TODOS los registros de un lote de Validacion=2 a otro valor
+ */
 async function cambiarValidacionLote(req, res) {
   try {
     const { idLote } = req.params;
