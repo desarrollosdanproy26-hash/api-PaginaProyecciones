@@ -48,13 +48,13 @@ router.get('/tables/:tableName/records/:id', tableController.getRecord);
 
 // Crear un nuevo registro (Asistente tiene permiso)
 router.post('/tables/:tableName/records', 
-  authController.authorizeRoles('Asistente'),
+  //authController.authorizeRoles('Asistente'),
   tableController.createRecord
 );
 
 // Actualizar un registro existente (Asistente tiene permiso)
 router.put('/tables/:tableName/records/:id', 
-  authController.authorizeRoles('Asistente'),
+  //authController.authorizeRoles('Asistente'),
   tableController.updateRecord
 );
 
@@ -92,30 +92,30 @@ router.get('/fenologia/lotes/:idLote/nivel-lote', fenologiaController.getDatosNi
 
 // Actualizar registro de fenología
 router.put('/fenologia/registros/:id', 
-  authController.authorizeRoles('Asistente'),
+  //authController.authorizeRoles('Asistente'),
   fenologiaController.actualizarRegistro
 );
 
 // ==================== RUTAS DE CONTEO DE FRUTOS ====================
 
 // Obtener fundos
-router.get('/conteo-frutos/fundos', conteoFrutosController.getFundos);
+router.get('/conteofrutos/fundos', conteoFrutosController.getFundos);
 
 // Obtener módulos por fundo
-router.get('/conteo-frutos/fundos/:idFundo/modulos', conteoFrutosController.getModulosByFundo);
+router.get('/conteofrutos/fundos/:idFundo/modulos', conteoFrutosController.getModulosByFundo);
 
 // Obtener turnos por módulo
-router.get('/conteo-frutos/modulos/:idModulo/turnos', conteoFrutosController.getTurnosByModulo);
+router.get('/conteofrutos/modulos/:idModulo/turnos', conteoFrutosController.getTurnosByModulo);
 
 // Obtener lotes por turno
-router.get('/conteo-frutos/turnos/:idTurno/lotes', conteoFrutosController.getLotesByTurno);
+router.get('/conteofrutos/turnos/:idTurno/lotes', conteoFrutosController.getLotesByTurno);
 
 // Obtener datos de conteo por lote
-router.get('/conteo-frutos/lotes/:idLote/datos', conteoFrutosController.getDatosConteo);
+router.get('/conteofrutos/lotes/:idLote/datos', conteoFrutosController.getDatosConteo);
 
 // Actualizar registro de conteo
-router.put('/conteo-frutos/registros/:id', 
-  authController.authorizeRoles('Asistente'),
+router.put('/conteofrutos/registros/:id', 
+  //authController.authorizeRoles('Asistente'),
   conteoFrutosController.actualizarRegistro
 );
 
