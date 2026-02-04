@@ -1,7 +1,35 @@
 const { getConnection, sql } = require('../config/database');
 
 /**
- * Obtener lista de fundos (OPTIMIZADO - SIN FILTRO)
+ * Calcular promedios de los datos de conteo
+ */
+function calcularPromedios(datos) {
+  if (!datos || datos.length === 0) return {};
+
+  const campos = [
+    'N_Cuajas', 'N_Frtotal', 'N_FrtPerdidos', 'N_FrtVI', 'N_FrtVT',
+    'N_FrtM30', 'N_FrtM50', 'N_FrtM75', 'N_FrtVMP30', 'N_FrtVMP50',
+    'N_FrtVMP75', 'N_FrtP30', 'N_FrtP50', 'N_FrtP75', 'N_FrtPN',
+    'N_FrtNP', 'N_FrtN', 'N_FrtRM', 'N_FrtR', 'N_FrtDS',
+    'N_FrtDeshL', 'N_FrtDeforL', 'N_FrtFMD', 'N_FrtDescomp', 'N_FrtPB',
+    'N_FrtRL', 'N_FrtRS', 'N_FrtRajMod', 'N_FrtFC', 'N_FrtFQ',
+    'N_FrtDP', 'N_FrtDA', 'N_FrtDM', 'N_FrtDC', 'N_FrtDPR',
+    'N_FrtDPP', 'N_FrtFV', 'N_FrtDPT', 'N_FrtFA', 'N_FrtTAPR'
+  ];
+
+  const promedios = {};
+  campos.forEach(campo => {
+    const valores = datos.map(d => parseFloat(d[campo]) || 0).filter(v => v !== 0);
+    promedios[campo] = valores.length > 0
+      ? parseFloat((valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(2))
+      : 0;
+  });
+
+  return promedios;
+}
+
+/**
+ * Obtener lista de fundos (OPTIMIZADO - SIN FILTROS)
  */
 async function getFundos(req, res) {
   try {
@@ -22,9 +50,6 @@ async function getFundos(req, res) {
   }
 }
 
-/**
- * Obtener módulos por fundo (OPTIMIZADO)
- */
 async function getModulosByFundo(req, res) {
   try {
     const { idFundo } = req.params;
@@ -33,10 +58,25 @@ async function getModulosByFundo(req, res) {
     const result = await pool.request()
       .input('idFundo', sql.Int, idFundo)
       .query(`
-        SELECT idModulo, Modulo
-        FROM Modulo
-        WHERE idFundo = @idFundo
-        ORDER BY Modulo
+        SELECT 
+          m.idModulo, 
+          m.Modulo,
+          CASE 
+            WHEN EXISTS (
+              SELECT 1 
+              FROM Turno t
+              INNER JOIN Lote l ON l.idTurno = t.idTurno
+              INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+              INNER JOIN Evaluacion e ON e.idEvaluacion = p.IdEvaluacion
+              WHERE t.idModulo = m.idModulo 
+              AND p.Validacion = 2
+              AND e.Evaluacion = 'Conteos'
+            ) THEN 'rojo'
+            ELSE 'verde'
+          END AS Color
+        FROM Modulo m
+        WHERE m.idFundo = @idFundo
+        ORDER BY m.Modulo
       `);
 
     res.json({
@@ -49,9 +89,6 @@ async function getModulosByFundo(req, res) {
   }
 }
 
-/**
- * Obtener turnos por módulo (OPTIMIZADO)
- */
 async function getTurnosByModulo(req, res) {
   try {
     const { idModulo } = req.params;
@@ -60,10 +97,25 @@ async function getTurnosByModulo(req, res) {
     const result = await pool.request()
       .input('idModulo', sql.Int, idModulo)
       .query(`
-        SELECT idTurno, Turno, SubTurno
-        FROM Turno
-        WHERE idModulo = @idModulo
-        ORDER BY Turno, SubTurno
+        SELECT 
+          t.idTurno, 
+          t.Turno, 
+          t.SubTurno,
+          CASE 
+            WHEN EXISTS (
+              SELECT 1 
+              FROM Lote l
+              INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+              INNER JOIN Evaluacion e ON e.idEvaluacion = p.IdEvaluacion
+              WHERE l.idTurno = t.idTurno 
+              AND p.Validacion = 2
+              AND e.Evaluacion = 'Conteos'
+            ) THEN 'rojo'
+            ELSE 'verde'
+          END AS Color
+        FROM Turno t
+        WHERE t.idModulo = @idModulo
+        ORDER BY t.Turno, t.SubTurno
       `);
 
     res.json({
@@ -76,9 +128,6 @@ async function getTurnosByModulo(req, res) {
   }
 }
 
-/**
- * Obtener lotes por turno (OPTIMIZADO)
- */
 async function getLotesByTurno(req, res) {
   try {
     const { idTurno } = req.params;
@@ -91,13 +140,18 @@ async function getLotesByTurno(req, res) {
           L.idLote, 
           L.Lote,
           V.Variedad,
-          V.SubVariedad,
-          T.Densidad,
-          T.Vivero,
-          T.Nro_Hileras
+          CASE 
+            WHEN EXISTS (
+              SELECT 1 FROM TBL_ProyeccionesPimiento P 
+              INNER JOIN Evaluacion E ON E.idEvaluacion = P.IdEvaluacion
+              WHERE P.idLote = L.idLote 
+              AND P.Validacion = 2
+              AND E.Evaluacion = 'Conteos'
+            ) THEN 'rojo'
+            ELSE 'verde'
+          END AS Color
         FROM Lote L
         INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
-        INNER JOIN Turno T ON T.idTurno = L.idTurno
         WHERE L.idTurno = @idTurno
         ORDER BY L.Lote
       `);
@@ -113,24 +167,44 @@ async function getLotesByTurno(req, res) {
 }
 
 /**
- * Obtener datos de conteo de frutos por lote (últimas 2 semanas) - OPTIMIZADO
+ * Obtener datos de conteo por lote (últimas 2 semanas) - DETALLE
  */
 async function getDatosConteo(req, res) {
   try {
     const { idLote } = req.params;
     const pool = await getConnection();
     
-    // PASO 1: Obtener las últimas 2 semanas (rápido)
+    // PASO 1: Obtener el año máximo
+    const anioResult = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .query(`
+        SELECT MAX(YEAR(Fecha)) as MaxAnio
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        WHERE TBL.idLote = @idLote AND E.Evaluacion = 'Conteos'
+      `);
+    
+    const maxAnio = anioResult.recordset[0]?.MaxAnio;
+    if (!maxAnio) {
+      return res.json({
+        success: true,
+        ultimaSemana: { semana: null, datos: [], promedios: {} },
+        penultimaSemana: { semana: null, datos: [], promedios: {} }
+      });
+    }
+    
+    // PASO 2: Obtener las últimas 2 semanas del año máximo
     const semanasResult = await pool.request()
       .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
       .query(`
         SELECT DISTINCT TOP 2 DATEPART(iso_week, Fecha) as Semana
         FROM TBL_ProyeccionesPimiento TBL
         INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
-        WHERE TBL.idLote = @idLote AND E.Evaluacion = 'Conteos'
+        WHERE TBL.idLote = @idLote AND E.Evaluacion = 'Conteos' AND YEAR(Fecha) = @maxAnio
         ORDER BY Semana DESC
       `);
-
+    
     if (semanasResult.recordset.length === 0) {
       return res.json({
         success: true,
@@ -138,14 +212,15 @@ async function getDatosConteo(req, res) {
         penultimaSemana: { semana: null, datos: [], promedios: {} }
       });
     }
-
+    
     const semanas = semanasResult.recordset.map(r => r.Semana);
     const ultimaSemana = semanas[0];
     const penultimaSemana = semanas[1] || semanas[0];
-
-    // PASO 2: Obtener solo los datos necesarios (sin tantos JOINs)
+    
+    // PASO 3: Obtener datos detallados
     const result = await pool.request()
       .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
       .input('semana1', sql.Int, ultimaSemana)
       .input('semana2', sql.Int, penultimaSemana)
       .query(`
@@ -156,43 +231,64 @@ async function getDatosConteo(req, res) {
           TBL.Hora,
           U.Nombre,
           TBL.Muestra,
-          TBL.N_Cuajas as Cuajas,
-          TBL.N_FrtVI as VerdeInmaduro,
-          TBL.N_FrtVIVT50 as VerdeInm_turg50,
-          TBL.N_FrtVT as VerdeTurgente,
-          TBL.N_FrtM30 as Marron30,
-          TBL.N_FrtM50 as Marron50,
-          TBL.N_FrtM75 as Marron75,
-          TBL.N_FrtP30 as Pinton30,
-          TBL.N_FrtP50 as Pinton50,
-          TBL.N_FrtP75 as Pinton75,
-          TBL.N_FrtN as Naranja,
-          TBL.N_FrtR as Rojo,
-          TBL.N_FrtTAPR as TipoAji,
-          TBL.N_FrtDS as DeshiSevero,
-          TBL.N_FrtDM as DiametroMenor,
-          TBL.N_FrtFMD as DeformeModerado,
-          TBL.N_FrtDA as DañoAlternaria,
-          TBL.N_FrtDescomp as Descompuesto,
-          TBL.N_FrtDP as DañoProdiplosis,
-          TBL.N_FrtDPR as DañoRoedores,
-          TBL.N_FrtRL as RajadoLeve,
-          TBL.N_FrtRS as RajadoSevero,
-          TBL.N_FrtFC as Cracking,
-          TBL.N_FrtFA as FormaAji
+          TBL.Vivero,
+          TBL.Descripcion,
+          TBL.CodSubTurno,
+          TBL.N_Cuajas,
+          TBL.N_Frtotal,
+          TBL.N_FrtPerdidos,
+          TBL.N_FrtVI,
+          TBL.N_FrtVT,
+          TBL.N_FrtM30,
+          TBL.N_FrtM50,
+          TBL.N_FrtM75,
+          TBL.N_FrtVMP30,
+          TBL.N_FrtVMP50,
+          TBL.N_FrtVMP75,
+          TBL.N_FrtP30,
+          TBL.N_FrtP50,
+          TBL.N_FrtP75,
+          TBL.N_FrtPN,
+          TBL.N_FrtNP,
+          TBL.N_FrtN,
+          TBL.N_FrtRM,
+          TBL.N_FrtR,
+          TBL.N_FrtDS,
+          TBL.N_FrtDeshL,
+          TBL.N_FrtDeforL,
+          TBL.N_FrtFMD,
+          TBL.N_FrtDescomp,
+          TBL.N_FrtPB,
+          TBL.N_FrtRL,
+          TBL.N_FrtRS,
+          TBL.N_FrtRajMod,
+          TBL.N_FrtFC,
+          TBL.N_FrtFQ,
+          TBL.N_FrtDP,
+          TBL.N_FrtDA,
+          TBL.N_FrtDM,
+          TBL.N_FrtDC,
+          TBL.N_FrtDPR,
+          TBL.N_FrtDPP,
+          TBL.N_FrtFV,
+          TBL.N_FrtDPT,
+          TBL.N_FrtFA,
+          TBL.N_FrtTAPR
         FROM TBL_ProyeccionesPimiento TBL 
         INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
         INNER JOIN Usuario U ON U.idUsuario = TBL.idUsuario
         WHERE TBL.idLote = @idLote 
           AND E.Evaluacion = 'Conteos'
+          AND YEAR(TBL.Fecha) = @maxAnio
           AND DATEPART(iso_week, TBL.Fecha) IN (@semana1, @semana2)
+          AND TBL.Validacion != 0
         ORDER BY TBL.Fecha DESC, TBL.Hora DESC, TBL.Muestra ASC
       `);
-
+    
     // Separar datos por semana
     const datosUltimaSemana = result.recordset.filter(r => r.Semana === ultimaSemana);
     const datosPenultimaSemana = result.recordset.filter(r => r.Semana === penultimaSemana);
-
+    
     res.json({
       success: true,
       ultimaSemana: {
@@ -211,81 +307,38 @@ async function getDatosConteo(req, res) {
     res.status(500).json({ success: false, error: err.message });
   }
 }
+
 /**
- * Actualizar registro de conteo (solo última semana)
+ * Actualizar un registro individual
  */
 async function actualizarRegistro(req, res) {
   try {
     const { id } = req.params;
     const datos = req.body;
-
+    
     const pool = await getConnection();
-
-    // Campos numéricos editables (todos los campos de conteo)
-    const camposEditables = [
-      'Cuajas', 'VerdeInmaduro', 'VerdeInm_turg50', 'VerdeTurgente',
-      'Marron30', 'Marron50', 'Marron75', 'Pinton30', 'Pinton50', 'Pinton75',
-      'Naranja', 'Rojo', 'TipoAji', 'DeshiSevero', 'DiametroMenor',
-      'DeformeModerado', 'DañoAlternaria', 'Descompuesto', 'DañoProdiplosis',
-      'DañoRoedores', 'RajadoLeve', 'RajadoSevero', 'Cracking', 'FormaAji'
-    ];
-
-    // Mapeo de nombres frontend a nombres de BD
-    const mapeoColumnas = {
-      'Cuajas': 'N_Cuajas',
-      'VerdeInmaduro': 'N_FrtVI',
-      'VerdeInm_turg50': 'N_FrtVIVT50',
-      'VerdeTurgente': 'N_FrtVT',
-      'Marron30': 'N_FrtM30',
-      'Marron50': 'N_FrtM50',
-      'Marron75': 'N_FrtM75',
-      'Pinton30': 'N_FrtP30',
-      'Pinton50': 'N_FrtP50',
-      'Pinton75': 'N_FrtP75',
-      'Naranja': 'N_FrtN',
-      'Rojo': 'N_FrtR',
-      'TipoAji': 'N_FrtTAPR',
-      'DeshiSevero': 'N_FrtDS',
-      'DiametroMenor': 'N_FrtDM',
-      'DeformeModerado': 'N_FrtFMD',
-      'DañoAlternaria': 'N_FrtDA',
-      'Descompuesto': 'N_FrtDescomp',
-      'DañoProdiplosis': 'N_FrtDP',
-      'DañoRoedores': 'N_FrtDPR',
-      'RajadoLeve': 'N_FrtRL',
-      'RajadoSevero': 'N_FrtRS',
-      'Cracking': 'N_FrtFC',
-      'FormaAji': 'N_FrtFA'
-    };
-
-    // Construir query UPDATE dinámicamente
-    const setClauses = [];
-    const request = pool.request();
-    request.input('id', sql.Int, id);
-
-    for (const campo of camposEditables) {
-      if (datos.hasOwnProperty(campo)) {
-        const nombreColumna = mapeoColumnas[campo] || campo;
-        setClauses.push(`${nombreColumna} = @${campo}`);
-        request.input(campo, sql.Float, datos[campo] || null);
+    
+    // Construir dinámicamente el UPDATE
+    const campos = Object.keys(datos).filter(key => key !== 'id');
+    const setClauses = campos.map(campo => `${campo} = @${campo}`).join(', ');
+    
+    const request = pool.request().input('id', sql.Int, id);
+    
+    campos.forEach(campo => {
+      const valor = datos[campo];
+      if (typeof valor === 'number') {
+        request.input(campo, sql.Float, valor);
+      } else if (typeof valor === 'string') {
+        request.input(campo, sql.NVarChar, valor);
       }
-    }
-
-    if (setClauses.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No hay campos para actualizar'
-      });
-    }
-
-    const query = `
-      UPDATE TBL_ProyeccionesPimiento
-      SET ${setClauses.join(', ')}
+    });
+    
+    await request.query(`
+      UPDATE TBL_ProyeccionesPimiento 
+      SET ${setClauses}
       WHERE idtablamaestra = @id
-    `;
-
-    await request.query(query);
-
+    `);
+    
     res.json({
       success: true,
       message: 'Registro actualizado correctamente'
@@ -297,35 +350,334 @@ async function actualizarRegistro(req, res) {
 }
 
 /**
- * Calcular promedios de campos numéricos
+ * Obtener datos de conteo por turno (últimas 2 semanas)
  */
-function calcularPromedios(datos) {
-  if (datos.length === 0) return {};
-
-  const camposNumericos = [
-    'Cuajas', 'VerdeInmaduro', 'VerdeInm_turg50', 'VerdeTurgente',
-    'Marron30', 'Marron50', 'Marron75', 'Pinton30', 'Pinton50', 'Pinton75',
-    'Naranja', 'Rojo', 'TipoAji', 'DeshiSevero', 'DiametroMenor',
-    'DeformeModerado', 'DañoAlternaria', 'Descompuesto', 'DañoProdiplosis',
-    'DañoRoedores', 'RajadoLeve', 'RajadoSevero', 'Cracking', 'FormaAji'
-  ];
-
-  const promedios = {};
-
-  for (const campo of camposNumericos) {
-    const valores = datos
-      .map(d => d[campo])
-      .filter(v => v !== null && v !== undefined && !isNaN(v));
+async function getDatosConteoTurno(req, res) {
+  try {
+    const { idTurno } = req.params;
+    const pool = await getConnection();
     
-    if (valores.length > 0) {
-      const suma = valores.reduce((acc, val) => acc + parseFloat(val), 0);
-      promedios[campo] = (suma / valores.length).toFixed(2);
-    } else {
-      promedios[campo] = 0;
+    // PASO 1: Obtener el año máximo
+    const anioResult = await pool.request()
+      .input('idTurno', sql.Int, idTurno)
+      .query(`
+        SELECT MAX(YEAR(TBL.Fecha)) as MaxAnio
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
+        WHERE L.idTurno = @idTurno AND E.Evaluacion = 'Conteos'
+      `);
+    
+    const maxAnio = anioResult.recordset[0]?.MaxAnio;
+    if (!maxAnio) {
+      return res.json({
+        success: true,
+        ultimaSemana: { semana: null, lotes: [], promedioGeneral: {} },
+        penultimaSemana: { semana: null, lotes: [], promedioGeneral: {} }
+      });
     }
+    
+    // PASO 2: Obtener las últimas 2 semanas del año máximo
+    const semanasResult = await pool.request()
+      .input('idTurno', sql.Int, idTurno)
+      .input('maxAnio', sql.Int, maxAnio)
+      .query(`
+        SELECT DISTINCT TOP 2 DATEPART(iso_week, TBL.Fecha) as Semana
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
+        WHERE L.idTurno = @idTurno AND E.Evaluacion = 'Conteos' AND YEAR(TBL.Fecha) = @maxAnio
+        ORDER BY Semana DESC
+      `);
+    
+    if (semanasResult.recordset.length === 0) {
+      return res.json({
+        success: true,
+        ultimaSemana: { semana: null, lotes: [], promedioGeneral: {} },
+        penultimaSemana: { semana: null, lotes: [], promedioGeneral: {} }
+      });
+    }
+    
+    const semanas = semanasResult.recordset.map(r => r.Semana);
+    const ultimaSemana = semanas[0];
+    const penultimaSemana = semanas[1] || semanas[0];
+    
+    // PASO 3: Obtener los datos usando el query proporcionado
+    const result = await pool.request()
+      .input('idTurno', sql.Int, idTurno)
+      .input('maxAnio', sql.Int, maxAnio)
+      .input('semana1', sql.Int, ultimaSemana)
+      .input('semana2', sql.Int, penultimaSemana)
+      .query(`
+        SELECT 
+          DATEPART(iso_week, TBL.Fecha) AS Semana,
+          TBL.Fecha                    AS Fecha,
+          L.idLote                     AS idLote,
+          L.Lote                       AS Lote,
+          TBL.Vivero                   AS Vivero,
+          TBL.Descripcion              AS Descripcion,
+          TBL.CodSubTurno              AS CodSubTurno,
+          TBL.N_Cuajas                 AS N_Cuajas,
+          TBL.N_Frtotal                AS N_Frtotal,
+          TBL.N_FrtPerdidos            AS N_FrtPerdidos,
+          TBL.N_FrtVI                  AS N_FrtVI,
+          TBL.N_FrtVT                  AS N_FrtVT,
+          TBL.N_FrtM30                 AS N_FrtM30,
+          TBL.N_FrtM50                 AS N_FrtM50,
+          TBL.N_FrtM75                 AS N_FrtM75,
+          TBL.N_FrtVMP30               AS N_FrtVMP30,
+          TBL.N_FrtVMP50               AS N_FrtVMP50,
+          TBL.N_FrtVMP75               AS N_FrtVMP75,
+          TBL.N_FrtP30                 AS N_FrtP30,
+          TBL.N_FrtP50                 AS N_FrtP50,
+          TBL.N_FrtP75                 AS N_FrtP75,
+          TBL.N_FrtPN                  AS N_FrtPN,
+          TBL.N_FrtNP                  AS N_FrtNP,
+          TBL.N_FrtN                   AS N_FrtN,
+          TBL.N_FrtRM                  AS N_FrtRM,
+          TBL.N_FrtR                   AS N_FrtR,
+          TBL.N_FrtDS                  AS N_FrtDS,
+          TBL.N_FrtDeshL               AS N_FrtDeshL,
+          TBL.N_FrtDeforL              AS N_FrtDeforL,
+          TBL.N_FrtFMD                 AS N_FrtFMD,
+          TBL.N_FrtDescomp             AS N_FrtDescomp,
+          TBL.N_FrtPB                  AS N_FrtPB,
+          TBL.N_FrtRL                  AS N_FrtRL,
+          TBL.N_FrtRS                  AS N_FrtRS,
+          TBL.N_FrtRajMod              AS N_FrtRajMod,
+          TBL.N_FrtFC                  AS N_FrtFC,
+          TBL.N_FrtFQ                  AS N_FrtFQ,
+          TBL.N_FrtDP                  AS N_FrtDP,
+          TBL.N_FrtDA                  AS N_FrtDA,
+          TBL.N_FrtDM                  AS N_FrtDM,
+          TBL.N_FrtDC                  AS N_FrtDC,
+          TBL.N_FrtDPR                 AS N_FrtDPR,
+          TBL.N_FrtDPP                 AS N_FrtDPP,
+          TBL.N_FrtFV                  AS N_FrtFV,
+          TBL.N_FrtDPT                 AS N_FrtDPT,
+          TBL.N_FrtFA                  AS N_FrtFA,
+          TBL.N_FrtTAPR                AS N_FrtTAPR
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
+        WHERE L.idTurno = @idTurno
+          AND E.Evaluacion = 'Conteos'
+          AND YEAR(TBL.Fecha) = @maxAnio
+          AND DATEPART(iso_week, TBL.Fecha) IN (@semana1, @semana2)
+        ORDER BY L.Lote, DATEPART(iso_week, TBL.Fecha)
+      `);
+    
+    // Separar por semana
+    const datosUltimaSemana = result.recordset.filter(r => r.Semana === ultimaSemana);
+    const datosPenultimaSemana = result.recordset.filter(r => r.Semana === penultimaSemana);
+    
+    // Agrupar por lote y calcular promedios
+    const agruparPorLote = (datos) => {
+      const lotes = {};
+      datos.forEach(registro => {
+        if (!lotes[registro.idLote]) {
+          lotes[registro.idLote] = {
+            idLote: registro.idLote,
+            Lote: registro.Lote,
+            datos: []
+          };
+        }
+        lotes[registro.idLote].datos.push(registro);
+      });
+      
+      // Calcular promedios por lote
+      return Object.values(lotes).map(lote => ({
+        idLote: lote.idLote,
+        Lote: lote.Lote,
+        fecha: lote.datos[0]?.Fecha || null,
+        promedios: calcularPromedios(lote.datos)
+      }));
+    };
+    
+    const lotesPenultimaSemana = agruparPorLote(datosPenultimaSemana);
+    const lotesUltimaSemana = agruparPorLote(datosUltimaSemana);
+    
+    // Calcular promedio GENERAL del turno
+    const promedioGeneralPenultima = calcularPromedios(datosPenultimaSemana);
+    const promedioGeneralUltima = calcularPromedios(datosUltimaSemana);
+    
+    res.json({
+      success: true,
+      ultimaSemana: {
+        semana: ultimaSemana,
+        lotes: lotesUltimaSemana,
+        promedioGeneral: promedioGeneralUltima
+      },
+      penultimaSemana: {
+        semana: penultimaSemana,
+        lotes: lotesPenultimaSemana,
+        promedioGeneral: promedioGeneralPenultima
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error al obtener datos conteo turno:', err.message);
+    res.status(500).json({ success: false, error: err.message });
   }
+}
 
-  return promedios;
+/**
+ * Obtener promedios a NIVEL LOTE para Conteos (últimas 2 semanas)
+ */
+async function getDatosConteoLote(req, res) {
+  try {
+    const { idLote } = req.params;
+    const pool = await getConnection();
+    
+    // PASO 1: Obtener el año máximo
+    const anioResult = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .query(`
+        SELECT MAX(YEAR(Fecha)) as MaxAnio
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        WHERE TBL.idLote = @idLote AND E.Evaluacion = 'Conteos'
+      `);
+    
+    const maxAnio = anioResult.recordset[0]?.MaxAnio;
+    if (!maxAnio) {
+      return res.json({
+        success: true,
+        ultimaSemana: { semana: null, promedios: {} },
+        penultimaSemana: { semana: null, promedios: {} }
+      });
+    }
+    
+    // PASO 2: Obtener las últimas 2 semanas del año máximo
+    const semanasResult = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
+      .query(`
+        SELECT DISTINCT TOP 2 DATEPART(iso_week, Fecha) as Semana
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        WHERE TBL.idLote = @idLote AND E.Evaluacion = 'Conteos' AND YEAR(Fecha) = @maxAnio
+        ORDER BY Semana DESC
+      `);
+    
+    if (semanasResult.recordset.length === 0) {
+      return res.json({
+        success: true,
+        ultimaSemana: { semana: null, promedios: {} },
+        penultimaSemana: { semana: null, promedios: {} }
+      });
+    }
+    
+    const semanas = semanasResult.recordset.map(r => r.Semana);
+    const ultimaSemana = semanas[0];
+    const penultimaSemana = semanas[1] || semanas[0];
+    
+    // PASO 3: Obtener TODOS los datos del lote para calcular promedios
+    const result = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
+      .input('semana1', sql.Int, ultimaSemana)
+      .input('semana2', sql.Int, penultimaSemana)
+      .query(`
+        SELECT 
+          DATEPART(iso_week, TBL.Fecha) as Semana,
+          TBL.Fecha,
+          L.Lote,
+          TBL.N_Cuajas,
+          TBL.N_Frtotal,
+          TBL.N_FrtPerdidos,
+          TBL.N_FrtVI,
+          TBL.N_FrtVT,
+          TBL.N_FrtM30,
+          TBL.N_FrtM50,
+          TBL.N_FrtM75,
+          TBL.N_FrtVMP30,
+          TBL.N_FrtVMP50,
+          TBL.N_FrtVMP75,
+          TBL.N_FrtP30,
+          TBL.N_FrtP50,
+          TBL.N_FrtP75,
+          TBL.N_FrtPN,
+          TBL.N_FrtNP,
+          TBL.N_FrtN,
+          TBL.N_FrtRM,
+          TBL.N_FrtR,
+          TBL.N_FrtDS,
+          TBL.N_FrtDeshL,
+          TBL.N_FrtDeforL,
+          TBL.N_FrtFMD,
+          TBL.N_FrtDescomp,
+          TBL.N_FrtPB,
+          TBL.N_FrtRL,
+          TBL.N_FrtRS,
+          TBL.N_FrtRajMod,
+          TBL.N_FrtFC,
+          TBL.N_FrtFQ,
+          TBL.N_FrtDP,
+          TBL.N_FrtDA,
+          TBL.N_FrtDM,
+          TBL.N_FrtDC,
+          TBL.N_FrtDPR,
+          TBL.N_FrtDPP,
+          TBL.N_FrtFV,
+          TBL.N_FrtDPT,
+          TBL.N_FrtFA,
+          TBL.N_FrtTAPR
+        FROM TBL_ProyeccionesPimiento TBL 
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
+        WHERE TBL.idLote = @idLote 
+          AND E.Evaluacion = 'Conteos'
+          AND YEAR(TBL.Fecha) = @maxAnio
+          AND DATEPART(iso_week, TBL.Fecha) IN (@semana1, @semana2)
+      `);
+    
+    // Separar y calcular promedios por semana
+    const datosUltimaSemana = result.recordset.filter(r => r.Semana === ultimaSemana);
+    const datosPenultimaSemana = result.recordset.filter(r => r.Semana === penultimaSemana);
+    
+    res.json({
+      success: true,
+      ultimaSemana: {
+        semana: ultimaSemana,
+        promedios: calcularPromedios(datosUltimaSemana)
+      },
+      penultimaSemana: {
+        semana: penultimaSemana,
+        promedios: calcularPromedios(datosPenultimaSemana)
+      }
+    });
+  } catch (err) {
+    console.error('❌ Error al obtener datos conteo lote:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function cambiarValidacionLote(req, res) {
+  try {
+    const { idLote } = req.params;
+    const { validacionNueva } = req.body;
+    
+    const pool = await getConnection();
+    
+    await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('validacionNueva', sql.Int, validacionNueva)
+      .query(`
+        UPDATE TBL_ProyeccionesPimiento
+        SET Validacion = @validacionNueva
+        WHERE idLote = @idLote 
+        AND Validacion = 2
+        AND IdEvaluacion = (SELECT idEvaluacion FROM Evaluacion WHERE Evaluacion = 'Conteos')
+      `);
+    
+    res.json({
+      success: true,
+      message: 'Validación actualizada correctamente'
+    });
+  } catch (err) {
+    console.error('❌ Error al cambiar validación:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
 }
 
 module.exports = {
@@ -334,5 +686,8 @@ module.exports = {
   getTurnosByModulo,
   getLotesByTurno,
   getDatosConteo,
-  actualizarRegistro
+  actualizarRegistro,
+  getDatosConteoTurno,
+  getDatosConteoLote,
+  cambiarValidacionLote
 };
