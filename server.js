@@ -19,7 +19,12 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 
 // CORS - Permitir peticiones desde el frontend
-app.use(cors());
+// CORS - Permitir peticiones desde cualquier origen sin restricciones
+app.use(cors({
+  origin: '*',
+  methods: '*',
+  allowedHeaders: '*'
+}));
 
 
 // Body parser
