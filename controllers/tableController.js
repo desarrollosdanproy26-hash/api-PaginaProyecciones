@@ -1,493 +1,759 @@
 const { getConnection, sql } = require('../config/database');
 
 /**
- * Obtiene todas las tablas disponibles en la base de datos
+ * Obtener lista de fundos (OPTIMIZADO - SIN FILTROS)
  */
-async function getTables(req, res) {
+async function getFundos(req, res) {
   try {
     const pool = await getConnection();
     const result = await pool.request().query(`
-      SELECT TABLE_NAME 
-      FROM INFORMATION_SCHEMA.TABLES 
-      WHERE TABLE_TYPE = 'BASE TABLE' 
-      AND TABLE_NAME NOT LIKE 'sys%'
-      ORDER BY TABLE_NAME
+      SELECT idFundo, Fundo
+      FROM Fundo
+      ORDER BY Fundo
     `);
-    
-    res.json({ success: true, tables: result.recordset.map(r => r.TABLE_NAME) });
+
+    res.json({
+      success: true,
+      data: result.recordset
+    });
   } catch (err) {
-    console.error('Error obteniendo tablas:', err);
+    console.error('❌ Error al obtener fundos:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }
 
-/**
- * Obtiene el esquema (columnas) de una tabla específica
- */
-async function getTableSchema(req, res) {
+async function getModulosByFundo(req, res) {
   try {
-    const { tableName } = req.params;
+    const { idFundo } = req.params;
     const pool = await getConnection();
     
     const result = await pool.request()
-      .input('tableName', sql.NVarChar, tableName)
+      .input('idFundo', sql.Int, idFundo)
       .query(`
         SELECT 
-          COLUMN_NAME as name,
-          DATA_TYPE as type,
-          CHARACTER_MAXIMUM_LENGTH as maxLength,
-          IS_NULLABLE as nullable,
-          COLUMN_DEFAULT as defaultValue
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_NAME = @tableName
-        ORDER BY ORDINAL_POSITION
+            m.idModulo, 
+            m.Modulo,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM Turno t
+                    INNER JOIN Lote l ON l.idTurno = t.idTurno
+                    INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+                    INNER JOIN Evaluacion e ON e.idEvaluacion = p.IdEvaluacion
+                    WHERE t.idModulo = m.idModulo 
+                    AND p.Validacion = 2
+                    AND e.Evaluacion = 'Fenologia'
+                ) THEN 'rojo'
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM Turno t
+                    INNER JOIN Lote l ON l.idTurno = t.idTurno
+                    INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+                    INNER JOIN Evaluacion e ON e.idEvaluacion = p.IdEvaluacion
+                    WHERE t.idModulo = m.idModulo 
+                    AND p.Validacion = 1
+                    AND e.Evaluacion = 'Fenologia'
+                ) THEN 'verde'
+                ELSE 'gris'
+            END AS Color
+        FROM Modulo m
+        WHERE m.idFundo = @idFundo
+        ORDER BY m.Modulo
       `);
-    
-    // Obtener primary keys
-    const pkResult = await pool.request()
-      .input('tableName', sql.NVarChar, tableName)
-      .query(`
-        SELECT COLUMN_NAME as name
-        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-        WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
-        AND TABLE_NAME = @tableName
-      `);
-    
-    const primaryKeys = pkResult.recordset.map(r => r.name);
-    
-    res.json({ 
-      success: true, 
-      schema: result.recordset,
-      primaryKeys: primaryKeys
+
+    res.json({
+      success: true,
+      data: result.recordset
     });
   } catch (err) {
-    console.error('Error obteniendo esquema:', err);
+    console.error('❌ Error al obtener módulos:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function getTurnosByModulo(req, res) {
+  try {
+    const { idModulo } = req.params;
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .input('idModulo', sql.Int, idModulo)
+      .query(`
+        SELECT 
+            t.idTurno, 
+            t.Turno, 
+            t.SubTurno,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM Lote l
+                    INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+                    INNER JOIN Evaluacion e ON e.idEvaluacion = p.IdEvaluacion
+                    WHERE l.idTurno = t.idTurno 
+                    AND p.Validacion = 2
+                    AND e.Evaluacion = 'Fenologia'
+                ) THEN 'rojo'
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM Lote l
+                    INNER JOIN TBL_ProyeccionesPimiento p ON p.idLote = l.idLote
+                    INNER JOIN Evaluacion e ON e.idEvaluacion = p.IdEvaluacion
+                    WHERE l.idTurno = t.idTurno 
+                    AND p.Validacion = 1
+                    AND e.Evaluacion = 'Fenologia'
+                ) THEN 'verde'
+                ELSE 'gris'
+            END AS Color
+        FROM Turno t
+        WHERE t.idModulo = @idModulo
+        ORDER BY t.Turno, t.SubTurno
+      `);
+
+    res.json({
+      success: true,
+      data: result.recordset
+    });
+  } catch (err) {
+    console.error('❌ Error al obtener turnos:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function getLotesByTurno(req, res) {
+  try {
+    const { idTurno } = req.params;
+    const pool = await getConnection();
+    
+    const result = await pool.request()
+      .input('idTurno', sql.Int, idTurno)
+      .query(`
+        SELECT 
+          L.idLote, 
+          L.Lote,
+          V.Variedad,
+          CASE 
+            WHEN EXISTS (
+                SELECT 1 FROM TBL_ProyeccionesPimiento P 
+                INNER JOIN Evaluacion E ON E.idEvaluacion = P.IdEvaluacion
+                WHERE P.idLote = L.idLote 
+                AND P.Validacion = 2
+                AND E.Evaluacion = 'Fenologia'
+            ) THEN 'rojo'
+            WHEN EXISTS (
+                SELECT 1 FROM TBL_ProyeccionesPimiento P 
+                INNER JOIN Evaluacion E ON E.idEvaluacion = P.IdEvaluacion
+                WHERE P.idLote = L.idLote 
+                AND P.Validacion = 1
+                AND E.Evaluacion = 'Fenologia'
+            ) THEN 'verde'
+            ELSE 'gris'
+          END AS Color
+        FROM Lote L
+        INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
+        WHERE L.idTurno = @idTurno
+        ORDER BY L.Lote
+      `);
+
+    res.json({
+      success: true,
+      data: result.recordset
+    });
+  } catch (err) {
+    console.error('❌ Error al obtener lotes:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }
 
 /**
- * Obtiene todos los registros de una tabla
+ * Obtener datos de fenología por lote (últimas 2 semanas) - OPTIMIZADO
  */
-async function getTableData(req, res) {
+async function getDatosFenologia(req, res) {
   try {
-    const { tableName } = req.params;
-    const { page = 1, pageSize = 100, sortBy, sortOrder = 'ASC' } = req.query;
-
+    const { idLote } = req.params;
     const pool = await getConnection();
     
-    // Obtener primary key
-    const pkResult = await pool.request()
-      .input('tableName', sql.NVarChar, tableName)
+    // PASO 1: Obtener el año máximo
+    const anioResult = await pool.request()
+      .input('idLote', sql.Int, idLote)
       .query(`
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-        WHERE TABLE_NAME = @tableName 
-        AND CONSTRAINT_NAME LIKE 'PK%'
+        SELECT MAX(YEAR(Fecha)) as MaxAnio
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        WHERE TBL.idLote = @idLote AND E.Evaluacion = 'Fenologia'
       `);
     
-    const primaryKey = pkResult.recordset[0]?.COLUMN_NAME || 'id';
-    const orderColumn = sortBy || primaryKey;
+    const maxAnio = anioResult.recordset[0]?.MaxAnio;
+    if (!maxAnio) {
+      return res.json({
+        success: true,
+        ultimaSemana: { semana: null, datos: [], promedios: {} },
+        penultimaSemana: { semana: null, datos: [], promedios: {} }
+      });
+    }
     
-    // Calcular offset
-    const offset = (page - 1) * pageSize;
-    const startRow = offset + 1;
-    const endRow = offset + parseInt(pageSize);
+    // PASO 2: Obtener las últimas 2 semanas del año máximo
+    const semanasResult = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
+      .query(`
+        SELECT DISTINCT TOP 2 DATEPART(iso_week, Fecha) as Semana
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        WHERE TBL.idLote = @idLote AND E.Evaluacion = 'Fenologia' AND YEAR(Fecha) = @maxAnio
+        ORDER BY Semana DESC
+      `);
     
-    // Usar ROW_NUMBER en lugar de OFFSET/FETCH
-    const query = `
-      WITH PaginatedData AS (
-        SELECT *, ROW_NUMBER() OVER (ORDER BY [${orderColumn}] ${sortOrder}) AS RowNum
-        FROM [${tableName}]
-      )
-      SELECT *
-      FROM PaginatedData
-      WHERE RowNum BETWEEN ${startRow} AND ${endRow}
-      ORDER BY RowNum
-    `;
+    if (semanasResult.recordset.length === 0) {
+      return res.json({
+        success: true,
+        ultimaSemana: { semana: null, datos: [], promedios: {} },
+        penultimaSemana: { semana: null, datos: [], promedios: {} }
+      });
+    }
     
-    const result = await pool.request().query(query);
+    const semanas = semanasResult.recordset.map(r => r.Semana);
+    const ultimaSemana = semanas[0];
+    const penultimaSemana = semanas[1] || semanas[0];
     
-    // Obtener total de registros
-    const countResult = await pool.request()
-      .query(`SELECT COUNT(*) as total FROM [${tableName}]`);
+    // PASO 3: Obtener solo los datos necesarios del año máximo y semanas filtradas
+    const result = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
+      .input('semana1', sql.Int, ultimaSemana)
+      .input('semana2', sql.Int, penultimaSemana)
+      .query(`
+        SELECT 
+          TBL.idtablamaestra as id,
+          DATEPART(iso_week, TBL.Fecha) as Semana,
+          TBL.Fecha,
+          TBL.Hora,
+          U.Nombre,
+          TBL.Muestra,
+          TBL.AltPlant as AlturaPlanta,
+          TBL.N_bot as Botones,
+          TBL.N_Flor as Flores,
+          TBL.N_Cuajas as Cuajas,
+          TBL.N_PC as PreCuajas,
+          TBL.N_CDeforP as CuajaDeforme,
+          TBL.N_CDA AS CuajasDañoAlternaria,
+          TBL.N_CDP as CuajaDañoProdi,
+          TBL.N_FrtN1 as FrutoNivel1,
+          TBL.N_FrtfQ as FrutosQuemados,
+          TBL.N_FrtFMD as FrutosDeformes,
+          TBL.N_FrtDeforL as DeformeLeve,
+          TBL.N_FrtTAPR as TipoAji,
+          TBL.N_FrtFA as FormaAji,
+          TBL.N_FrtDA as DañoAlternaria,
+          TBL.N_FrtDP as DañoProdiplosis,
+          TBL.N_FrtDescomp AS FrutosDescompuestos,
+          TBL.N_FrtDM AS DiametroMenor,
+          TBL.N_FrtDPR as DañoRoedores,
+          TBL.N_FrtDPP as DañoPajaros
+        FROM TBL_ProyeccionesPimiento TBL 
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Usuario U ON U.idUsuario = TBL.idUsuario
+        WHERE TBL.idLote = @idLote 
+          AND E.Evaluacion = 'Fenologia'
+          AND YEAR(TBL.Fecha) = @maxAnio
+          AND DATEPART(iso_week, TBL.Fecha) IN (@semana1, @semana2)
+          AND TBL.Validacion != 0
+        ORDER BY TBL.Fecha DESC, TBL.Hora DESC, TBL.Muestra ASC
+      `);
     
-    const total = countResult.recordset[0].total;
+    // Separar datos por semana
+    const datosUltimaSemana = result.recordset.filter(r => r.Semana === ultimaSemana);
+    const datosPenultimaSemana = result.recordset.filter(r => r.Semana === penultimaSemana);
     
     res.json({
       success: true,
-      data: result.recordset.map(row => {
-        const { RowNum, ...data } = row;
-        return data;
-      }),
-      pagination: {
-        page: parseInt(page),
-        pageSize: parseInt(pageSize),
-        total,
-        totalPages: Math.ceil(total / pageSize)
+      ultimaSemana: {
+        semana: ultimaSemana,
+        datos: datosUltimaSemana,
+        promedios: calcularPromedios(datosUltimaSemana)
+      },
+      penultimaSemana: {
+        semana: penultimaSemana,
+        datos: datosPenultimaSemana,
+        promedios: calcularPromedios(datosPenultimaSemana)
       }
     });
-
   } catch (err) {
-    console.error('❌ Error al obtener datos:', err.message);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
-    });
-  }
-}
-
-/**
- * Obtiene un registro específico por ID
- */
-async function getRecord(req, res) {
-  try {
-    const { tableName, id } = req.params;
-    const pool = await getConnection();
-    
-    // Obtener primary key de la tabla
-    const pkResult = await pool.request()
-      .input('tableName', sql.NVarChar, tableName)
-      .query(`
-        SELECT COLUMN_NAME as name
-        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-        WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
-        AND TABLE_NAME = @tableName
-      `);
-    
-    if (pkResult.recordset.length === 0) {
-      return res.status(400).json({ success: false, error: 'Tabla sin primary key' });
-    }
-    
-    const primaryKey = pkResult.recordset[0].name;
-    
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query(`SELECT * FROM [${tableName}] WHERE [${primaryKey}] = @id`);
-    
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ success: false, error: 'Registro no encontrado' });
-    }
-    
-    res.json({ success: true, data: result.recordset[0] });
-  } catch (err) {
-    console.error('Error obteniendo registro:', err);
+    console.error('❌ Error al obtener datos fenología:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }
 
 /**
- * Crea un nuevo registro
+ * Actualizar registro de fenología
+ * ✅ Cambia Validacion de 2 a 1 al editar
  */
-async function createRecord(req, res) {
+async function actualizarRegistro(req, res) {
   try {
-    const { tableName } = req.params;
-    const data = req.body;
-    
-    const pool = await getConnection();
-    
-    // Obtener columnas de la tabla
-    const columnsResult = await pool.request()
-      .input('tableName', sql.NVarChar, tableName)
-      .query(`
-        SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE,
-               COLUMNPROPERTY(OBJECT_ID(TABLE_SCHEMA + '.' + TABLE_NAME), COLUMN_NAME, 'IsIdentity') as IsIdentity
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_NAME = @tableName
-        ORDER BY ORDINAL_POSITION
-      `);
-    
-    // Filtrar columnas identity (auto-incrementales)
-    const columns = columnsResult.recordset.filter(col => col.IsIdentity === 0);
-    
-    // Construir query INSERT
-    const columnNames = columns.map(col => `[${col.COLUMN_NAME}]`).join(', ');
-    const paramNames = columns.map((col, idx) => `@param${idx}`).join(', ');
-    
-    const insertQuery = `
-      INSERT INTO [${tableName}] (${columnNames}) 
-      OUTPUT INSERTED.*
-      VALUES (${paramNames})
-    `;
-    
-    const request = pool.request();
-    
-    // Agregar parámetros
-    columns.forEach((col, idx) => {
-      const value = data[col.COLUMN_NAME];
-      const sqlType = getSqlType(col.DATA_TYPE);
-      request.input(`param${idx}`, sqlType, value);
-    });
-    
-    const result = await request.query(insertQuery);
-    
-    res.status(201).json({ 
-      success: true, 
-      message: 'Registro creado exitosamente',
-      data: result.recordset[0] 
-    });
-  } catch (err) {
-    console.error('Error creando registro:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-}
+    const { id } = req.params;
+    const datos = req.body;
 
-/**
- * Actualiza un registro existente
- */
-async function updateRecord(req, res) {
-  try {
-    const { tableName, id } = req.params;
-    const data = req.body;
-    
     const pool = await getConnection();
-    
-    // Obtener primary key
-    const pkResult = await pool.request()
-      .input('tableName', sql.NVarChar, tableName)
-      .query(`
-        SELECT COLUMN_NAME as name
-        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-        WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
-        AND TABLE_NAME = @tableName
-      `);
-    
-    if (pkResult.recordset.length === 0) {
-      return res.status(400).json({ success: false, error: 'Tabla sin primary key' });
-    }
-    
-    const primaryKey = pkResult.recordset[0].name;
-    
-    // Obtener columnas
-    const columnsResult = await pool.request()
-      .input('tableName', sql.NVarChar, tableName)
-      .query(`
-        SELECT COLUMN_NAME, DATA_TYPE
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_NAME = @tableName
-        AND COLUMN_NAME != @primaryKey
-      `, { primaryKey });
-    
-    // Construir SET clause
+
+    // Campos numéricos editables
+    const camposEditables = [
+      'AlturaPlanta',
+      'Botones',
+      'Flores',
+      'Cuajas',
+      'PreCuajas',
+      'CuajaDeforme',
+      'CuajasDañoAlternaria',
+      'CuajaDañoProdi',
+      'FrutoNivel1',
+      'FrutosQuemados',
+      'FrutosDeformes',
+      'DeformeLeve',
+      'TipoAji',
+      'FormaAji',
+      'DañoAlternaria',
+      'DañoProdiplosis',
+      'FrutosDescompuestos',
+      'DiametroMenor',
+      'DañoRoedores',
+      'DañoPajaros'
+    ];
+
+    // Mapeo de nombres frontend a nombres de BD
+    const mapeoColumnas = {
+      AlturaPlanta: 'AltPlant',
+      Botones: 'N_bot',
+      Flores: 'N_Flor',
+      Cuajas: 'N_Cuajas',
+      PreCuajas: 'N_PC',
+      CuajaDeforme: 'N_CDeforP',
+      CuajasDañoAlternaria: 'N_CDA',
+      CuajaDañoProdi: 'N_CDP',
+      FrutoNivel1: 'N_FrtN1',
+      FrutosQuemados: 'N_FrtfQ',
+      FrutosDeformes: 'N_FrtFMD',
+      DeformeLeve: 'N_FrtDeforL',
+      TipoAji: 'N_FrtTAPR',
+      FormaAji: 'N_FrtFA',
+      DañoAlternaria: 'N_FrtDA',
+      DañoProdiplosis: 'N_FrtDP',
+      FrutosDescompuestos: 'N_FrtDescomp',
+      DiametroMenor: 'N_FrtDM',
+      DañoRoedores: 'N_FrtDPR',
+      DañoPajaros: 'N_FrtDPP'
+    };
+
+    // Construir query UPDATE dinámicamente
     const setClauses = [];
     const request = pool.request();
-    
-    columnsResult.recordset.forEach((col, idx) => {
-      if (data.hasOwnProperty(col.COLUMN_NAME)) {
-        setClauses.push(`[${col.COLUMN_NAME}] = @param${idx}`);
-        const sqlType = getSqlType(col.DATA_TYPE);
-        request.input(`param${idx}`, sqlType, data[col.COLUMN_NAME]);
-      }
-    });
-    
-    if (setClauses.length === 0) {
-      return res.status(400).json({ success: false, error: 'No hay datos para actualizar' });
-    }
-    
     request.input('id', sql.Int, id);
-    
-    const updateQuery = `
-      UPDATE [${tableName}] 
-      SET ${setClauses.join(', ')}
-      OUTPUT INSERTED.*
-      WHERE [${primaryKey}] = @id
-    `;
-    
-    const result = await request.query(updateQuery);
-    
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ success: false, error: 'Registro no encontrado' });
+
+    for (const campo of camposEditables) {
+      if (datos.hasOwnProperty(campo)) {
+        const nombreColumna = mapeoColumnas[campo] || campo;
+        setClauses.push(`${nombreColumna} = @${campo}`);
+        request.input(campo, sql.Float, datos[campo] || null);
+      }
     }
-    
-    res.json({ 
-      success: true, 
-      message: 'Registro actualizado exitosamente',
-      data: result.recordset[0] 
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No hay campos para actualizar'
+      });
+    }
+
+    // ✅ Cambiar Validacion a 1 al editar (de 2 a 1)
+    setClauses.push('Validacion = 1');
+
+    const query = `
+      UPDATE TBL_ProyeccionesPimiento
+      SET ${setClauses.join(', ')}
+      WHERE idtablamaestra = @id
+    `;
+
+    await request.query(query);
+
+    res.json({
+      success: true,
+      message: 'Registro actualizado correctamente (Validacion cambiada a 1)'
     });
   } catch (err) {
-    console.error('Error actualizando registro:', err);
+    console.error('❌ Error al actualizar registro:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }
 
 /**
- * Elimina un registro
+ * Calcular promedios de campos numéricos
  */
-async function deleteRecord(req, res) {
+function calcularPromedios(datos) {
+  if (datos.length === 0) return {};
+
+  const camposNumericos = [
+    'AlturaPlanta',
+    'Botones',
+    'Flores',
+    'Cuajas',
+    'PreCuajas',
+    'CuajaDeforme',
+    'CuajasDañoAlternaria',
+    'CuajaDañoProdi',
+    'FrutoNivel1',
+    'FrutosQuemados',
+    'FrutosDeformes',
+    'DeformeLeve',
+    'TipoAji',
+    'FormaAji',
+    'DañoAlternaria',
+    'DañoProdiplosis',
+    'FrutosDescompuestos',
+    'DiametroMenor',
+    'DañoRoedores',
+    'DañoPajaros'
+  ];
+
+  const promedios = {};
+
+  for (const campo of camposNumericos) {
+    const valores = datos
+      .map(d => d[campo])
+      .filter(v => v !== null && v !== undefined && !isNaN(v));
+    
+    if (valores.length > 0) {
+      const suma = valores.reduce((acc, val) => acc + parseFloat(val), 0);
+      promedios[campo] = (suma / valores.length).toFixed(2);
+    } else {
+      promedios[campo] = 0;
+    }
+  }
+
+  return promedios;
+}
+
+/**
+ * Obtener promedios a NIVEL TURNO (todos los lotes del turno) - últimas 2 semanas
+ */
+async function getDatosNivelTurno(req, res) {
   try {
-    const { tableName, id } = req.params;
+    const { idTurno } = req.params;
     const pool = await getConnection();
     
-    // Obtener primary key
-    const pkResult = await pool.request()
-      .input('tableName', sql.NVarChar, tableName)
+    // PASO 1: Obtener el año máximo
+    const anioResult = await pool.request()
+      .input('idTurno', sql.Int, idTurno)
       .query(`
-        SELECT COLUMN_NAME as name
-        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-        WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
-        AND TABLE_NAME = @tableName
+        SELECT MAX(YEAR(Fecha)) as MaxAnio
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
+        WHERE L.idTurno = @idTurno AND E.Evaluacion = 'Fenologia'
       `);
     
-    if (pkResult.recordset.length === 0) {
-      return res.status(400).json({ success: false, error: 'Tabla sin primary key' });
-    }
-    
-    const primaryKey = pkResult.recordset[0].name;
-    
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query(`DELETE FROM [${tableName}] WHERE [${primaryKey}] = @id`);
-    
-    if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ success: false, error: 'Registro no encontrado' });
-    }
-    
-    res.json({ 
-      success: true, 
-      message: 'Registro eliminado exitosamente' 
-    });
-  } catch (err) {
-    console.error('Error eliminando registro:', err);
-    
-    // Detectar violación de foreign key constraint
-    if (err.message.includes('REFERENCE constraint')) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No se puede eliminar: el registro está siendo usado en otras tablas' 
+    const maxAnio = anioResult.recordset[0]?.MaxAnio;
+    if (!maxAnio) {
+      return res.json({
+        success: true,
+        ultimaSemana: { semana: null, promedios: {} },
+        penultimaSemana: { semana: null, promedios: {} }
       });
     }
     
-    res.status(500).json({ success: false, error: err.message });
-  }
-}
-
-/**
- * Obtiene datos relacionados para foreign keys
- */
-async function getRelatedData(req, res) {
-  try {
-    const { tableName, columnName } = req.params;
-    const pool = await getConnection();
+    // PASO 2: Obtener las últimas 2 semanas del año máximo
+    const semanasResult = await pool.request()
+      .input('idTurno', sql.Int, idTurno)
+      .input('maxAnio', sql.Int, maxAnio)
+      .query(`
+        SELECT DISTINCT TOP 2 DATEPART(iso_week, Fecha) as Semana
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
+        WHERE L.idTurno = @idTurno AND E.Evaluacion = 'Fenologia' AND YEAR(Fecha) = @maxAnio
+        ORDER BY Semana DESC
+      `);
     
-    // Obtener tabla referenciada
-    const fkResult = await pool.request()
-      .input('tableName', sql.NVarChar, tableName)
-      .input('columnName', sql.NVarChar, columnName)
+    if (semanasResult.recordset.length === 0) {
+      return res.json({
+        success: true,
+        ultimaSemana: { semana: null, promedios: {} },
+        penultimaSemana: { semana: null, promedios: {} }
+      });
+    }
+    
+    const semanas = semanasResult.recordset.map(r => r.Semana);
+    const ultimaSemana = semanas[0];
+    const penultimaSemana = semanas[1] || semanas[0];
+    
+    // PASO 3: Obtener datos AGRUPADOS por lote
+    const result = await pool.request()
+      .input('idTurno', sql.Int, idTurno)
+      .input('maxAnio', sql.Int, maxAnio)
+      .input('semana1', sql.Int, ultimaSemana)
+      .input('semana2', sql.Int, penultimaSemana)
       .query(`
         SELECT 
-          OBJECT_NAME(f.referenced_object_id) AS ReferencedTable,
-          COL_NAME(fc.referenced_object_id, fc.referenced_column_id) AS ReferencedColumn
-        FROM sys.foreign_keys AS f
-        INNER JOIN sys.foreign_key_columns AS fc 
-          ON f.object_id = fc.constraint_object_id
-        WHERE OBJECT_NAME(f.parent_object_id) = @tableName
-        AND COL_NAME(fc.parent_object_id, fc.parent_column_id) = @columnName
+          DATEPART(iso_week, TBL.Fecha) as Semana,
+          TBL.Fecha,
+          L.idLote,
+          L.Lote,
+          TBL.AltPlant as AlturaPlanta,
+          TBL.N_bot as Botones,
+          TBL.N_Flor as Flores,
+          TBL.N_Cuajas as Cuajas,
+          TBL.N_PC as PreCuajas,
+          TBL.N_CDeforP as CuajaDeforme,
+          TBL.N_CDA AS CuajasDañoAlternaria,
+          TBL.N_CDP as CuajaDañoProdi,
+          TBL.N_FrtN1 as FrutoNivel1,
+          TBL.N_FrtfQ as FrutosQuemados,
+          TBL.N_FrtFMD as FrutosDeformes,
+          TBL.N_FrtDeforL as DeformeLeve,
+          TBL.N_FrtTAPR as TipoAji,
+          TBL.N_FrtFA as FormaAji,
+          TBL.N_FrtDA as DañoAlternaria,
+          TBL.N_FrtDP as DañoProdiplosis,
+          TBL.N_FrtDescomp AS FrutosDescompuestos,
+          TBL.N_FrtDM AS DiametroMenor,
+          TBL.N_FrtDPR as DañoRoedores,
+          TBL.N_FrtDPP as DañoPajaros
+        FROM TBL_ProyeccionesPimiento TBL 
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
+        WHERE L.idTurno = @idTurno 
+          AND E.Evaluacion = 'Fenologia'
+          AND YEAR(TBL.Fecha) = @maxAnio
+          AND DATEPART(iso_week, TBL.Fecha) IN (@semana1, @semana2)
+        ORDER BY L.Lote, DATEPART(iso_week, TBL.Fecha)
       `);
     
-    if (fkResult.recordset.length === 0) {
-      return res.status(404).json({ success: false, error: 'Foreign key no encontrada' });
-    }
+    // Separar por semana
+    const datosUltimaSemana = result.recordset.filter(r => r.Semana === ultimaSemana);
+    const datosPenultimaSemana = result.recordset.filter(r => r.Semana === penultimaSemana);
     
-    const refTable = fkResult.recordset[0].ReferencedTable;
-    const refColumn = fkResult.recordset[0].ReferencedColumn;
+    // Agrupar por lote y calcular promedios
+    const agruparPorLote = (datos) => {
+      const lotes = {};
+      datos.forEach(registro => {
+        if (!lotes[registro.idLote]) {
+          lotes[registro.idLote] = {
+            idLote: registro.idLote,
+            Lote: registro.Lote,
+            datos: []
+          };
+        }
+        lotes[registro.idLote].datos.push(registro);
+      });
+      
+      // Calcular promedios por lote
+      return Object.values(lotes).map(lote => ({
+        idLote: lote.idLote,
+        Lote: lote.Lote,
+        fecha: lote.datos[0]?.Fecha || null,
+        promedios: calcularPromedios(lote.datos)
+      }));
+    };
     
-    // Obtener datos de la tabla referenciada
-    const dataResult = await pool.request().query(`
-      SELECT * FROM [${refTable}] ORDER BY [${refColumn}]
-    `);
+    const lotesPenultimaSemana = agruparPorLote(datosPenultimaSemana);
+    const lotesUltimaSemana = agruparPorLote(datosUltimaSemana);
     
-    res.json({ 
-      success: true, 
-      referencedTable: refTable,
-      referencedColumn: refColumn,
-      data: dataResult.recordset 
+    // Calcular promedio GENERAL del turno
+    const promedioGeneralPenultima = calcularPromedios(datosPenultimaSemana);
+    const promedioGeneralUltima = calcularPromedios(datosUltimaSemana);
+    
+    res.json({
+      success: true,
+      ultimaSemana: {
+        semana: ultimaSemana,
+        lotes: lotesUltimaSemana,
+        promedioGeneral: promedioGeneralUltima
+      },
+      penultimaSemana: {
+        semana: penultimaSemana,
+        lotes: lotesPenultimaSemana,
+        promedioGeneral: promedioGeneralPenultima
+      }
     });
   } catch (err) {
-    console.error('Error obteniendo datos relacionados:', err);
+    console.error('❌ Error al obtener datos nivel turno:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }
 
 /**
- * Ejecuta una consulta personalizada (con precaución)
+ * Obtener promedios a NIVEL LOTE
+ * ✅ Siempre editable, pero indica si tiene pendientes (Validacion=2)
  */
-async function executeQuery(req, res) {
+async function getDatosNivelLote(req, res) {
   try {
-    const { query } = req.body;
+    const { idLote } = req.params;
+    const pool = await getConnection();
     
-    // Validación básica (mejorar en producción)
-    if (!query || typeof query !== 'string') {
-      return res.status(400).json({ success: false, error: 'Query inválido' });
-    }
+    // PASO 1: Obtener el año máximo
+    const anioResult = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .query(`
+        SELECT MAX(YEAR(Fecha)) as MaxAnio
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        WHERE TBL.idLote = @idLote AND E.Evaluacion = 'Fenologia'
+      `);
     
-    // Prevenir operaciones destructivas sin WHERE
-    const lowerQuery = query.toLowerCase().trim();
-    if ((lowerQuery.includes('delete') || lowerQuery.includes('update')) && 
-        !lowerQuery.includes('where')) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Operaciones DELETE/UPDATE requieren cláusula WHERE' 
+    const maxAnio = anioResult.recordset[0]?.MaxAnio;
+    if (!maxAnio) {
+      return res.json({
+        success: true,
+        siempreEditable: true,
+        tienePendientes: false,
+        ultimaSemana: { semana: null, promedios: {} },
+        penultimaSemana: { semana: null, promedios: {} }
       });
     }
     
-    const pool = await getConnection();
-    const result = await pool.request().query(query);
+    // PASO 2: Obtener las últimas 2 semanas del año máximo
+    const semanasResult = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
+      .query(`
+        SELECT DISTINCT TOP 2 DATEPART(iso_week, Fecha) as Semana
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        WHERE TBL.idLote = @idLote AND E.Evaluacion = 'Fenologia' AND YEAR(Fecha) = @maxAnio
+        ORDER BY Semana DESC
+      `);
     
-    res.json({ 
-      success: true, 
-      data: result.recordset,
-      rowsAffected: result.rowsAffected 
+    if (semanasResult.recordset.length === 0) {
+      return res.json({
+        success: true,
+        siempreEditable: true,
+        tienePendientes: false,
+        ultimaSemana: { semana: null, promedios: {} },
+        penultimaSemana: { semana: null, promedios: {} }
+      });
+    }
+    
+    const semanas = semanasResult.recordset.map(r => r.Semana);
+    const ultimaSemana = semanas[0];
+    const penultimaSemana = semanas[1] || semanas[0];
+    
+    // PASO 3: Obtener TODOS los datos del lote para calcular promedios
+    const result = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
+      .input('semana1', sql.Int, ultimaSemana)
+      .input('semana2', sql.Int, penultimaSemana)
+      .query(`
+        SELECT 
+          DATEPART(iso_week, TBL.Fecha) as Semana,
+          TBL.Fecha,
+          L.Lote,
+          TBL.AltPlant as AlturaPlanta,
+          TBL.N_bot as Botones,
+          TBL.N_Flor as Flores,
+          TBL.N_Cuajas as Cuajas,
+          TBL.N_PC as PreCuajas,
+          TBL.N_CDeforP as CuajaDeforme,
+          TBL.N_CDA AS CuajasDañoAlternaria,
+          TBL.N_CDP as CuajaDañoProdi,
+          TBL.N_FrtN1 as FrutoNivel1,
+          TBL.N_FrtfQ as FrutosQuemados,
+          TBL.N_FrtFMD as FrutosDeformes,
+          TBL.N_FrtDeforL as DeformeLeve,
+          TBL.N_FrtTAPR as TipoAji,
+          TBL.N_FrtFA as FormaAji,
+          TBL.N_FrtDA as DañoAlternaria,
+          TBL.N_FrtDP as DañoProdiplosis,
+          TBL.N_FrtDescomp AS FrutosDescompuestos,
+          TBL.N_FrtDM AS DiametroMenor,
+          TBL.N_FrtDPR as DañoRoedores,
+          TBL.N_FrtDPP as DañoPajaros
+        FROM TBL_ProyeccionesPimiento TBL 
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
+        WHERE TBL.idLote = @idLote 
+          AND E.Evaluacion = 'Fenologia'
+          AND YEAR(TBL.Fecha) = @maxAnio
+          AND DATEPART(iso_week, TBL.Fecha) IN (@semana1, @semana2)
+      `);
+    
+    // Separar y calcular promedios por semana
+    const datosUltimaSemana = result.recordset.filter(r => r.Semana === ultimaSemana);
+    const datosPenultimaSemana = result.recordset.filter(r => r.Semana === penultimaSemana);
+
+    // ✅ VERIFICAR si tiene registros pendientes (Validacion=2)
+    const validacionResult = await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('maxAnio', sql.Int, maxAnio)
+      .input('semana1', sql.Int, ultimaSemana)
+      .query(`
+        SELECT 
+          COUNT(*) as Total,
+          SUM(CASE WHEN TBL.Validacion = 2 THEN 1 ELSE 0 END) as TotalPendientes
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        WHERE TBL.idLote = @idLote 
+          AND E.Evaluacion = 'Fenologia'
+          AND YEAR(TBL.Fecha) = @maxAnio
+          AND DATEPART(iso_week, TBL.Fecha) = @semana1
+      `);
+    
+    const resultado = validacionResult.recordset[0];
+    const tienePendientes = resultado.TotalPendientes > 0;
+    
+    res.json({
+      success: true,
+      siempreEditable: true, // ✅ SIEMPRE editable
+      tienePendientes: tienePendientes, // Para mostrar alerta visual
+      ultimaSemana: {
+        semana: ultimaSemana,
+        promedios: calcularPromedios(datosUltimaSemana)
+      },
+      penultimaSemana: {
+        semana: penultimaSemana,
+        promedios: calcularPromedios(datosPenultimaSemana)
+      }
     });
   } catch (err) {
-    console.error('Error ejecutando query:', err);
+    console.error('❌ Error al obtener datos nivel lote:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }
 
 /**
- * Mapea tipos de datos SQL a tipos de mssql
+ * Cambiar validación de lote (de Validacion=2 a 1)
  */
-function getSqlType(dataType) {
-  const typeMap = {
-    'int': sql.Int,
-    'bigint': sql.BigInt,
-    'smallint': sql.SmallInt,
-    'tinyint': sql.TinyInt,
-    'bit': sql.Bit,
-    'float': sql.Float,
-    'real': sql.Real,
-    'decimal': sql.Decimal,
-    'numeric': sql.Numeric,
-    'money': sql.Money,
-    'smallmoney': sql.SmallMoney,
-    'varchar': sql.VarChar,
-    'nvarchar': sql.NVarChar,
-    'char': sql.Char,
-    'nchar': sql.NChar,
-    'text': sql.Text,
-    'ntext': sql.NText,
-    'date': sql.Date,
-    'datetime': sql.DateTime,
-    'datetime2': sql.DateTime2,
-    'smalldatetime': sql.SmallDateTime,
-    'time': sql.Time,
-    'uniqueidentifier': sql.UniqueIdentifier,
-    'xml': sql.Xml,
-    'varbinary': sql.VarBinary,
-    'binary': sql.Binary
-  };
-  
-  return typeMap[dataType.toLowerCase()] || sql.NVarChar;
+async function cambiarValidacionLote(req, res) {
+  try {
+    const { idLote } = req.params;
+    const { validacionNueva } = req.body;
+    
+    const pool = await getConnection();
+    
+    await pool.request()
+      .input('idLote', sql.Int, idLote)
+      .input('validacionNueva', sql.Int, validacionNueva)
+      .query(`
+        UPDATE TBL_ProyeccionesPimiento
+        SET Validacion = @validacionNueva
+        WHERE idLote = @idLote AND Validacion = 2
+      `);
+    
+    res.json({
+      success: true,
+      message: 'Validación actualizada correctamente'
+    });
+  } catch (err) {
+    console.error('❌ Error al cambiar validación:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
 }
 
 module.exports = {
-  getTables,
-  getTableSchema,
-  getTableData,
-  getRecord,
-  createRecord,
-  updateRecord,
-  deleteRecord,
-  getRelatedData,
-  executeQuery
+  getFundos,
+  getModulosByFundo,
+  getTurnosByModulo,
+  getLotesByTurno,
+  getDatosFenologia,
+  actualizarRegistro,
+  getDatosNivelTurno,
+  getDatosNivelLote,
+  cambiarValidacionLote
 };
