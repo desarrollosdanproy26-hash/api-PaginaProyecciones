@@ -14,11 +14,16 @@ const PORT = process.env.PORT || 5000;
 // ==================== MIDDLEWARES ====================
 
 // CORS - UNA SOLA VEZ, PRIMERO
+// CORS - Leer desde variables de entorno
+const corsOrigin = process.env.CORS_ORIGIN || '*';
+const corsMethods = process.env.CORS_METHODS || 'GET,POST,PUT,DELETE,OPTIONS';
+const corsHeaders = process.env.CORS_HEADERS || 'Content-Type,Authorization';
+
 app.use(cors({
-  origin: '*',
+  origin: corsOrigin,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: corsMethods.split(','),
+  allowedHeaders: corsHeaders.split(',')
 }));
 
 // Seguridad HTTP
