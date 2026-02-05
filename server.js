@@ -11,32 +11,18 @@ const { errorHandler, notFound, requestLogger } = require('./middleware/errorHan
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ==================== MIDDLEWARES ====================
+
+// CORS - UNA SOLA VEZ, PRIMERO
 app.use(cors({
-  origin: '*', // O tu dominio específico
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
-app.use(helmet());
-app.use(morgan('dev'));
-
-
-
-// ==================== Mcd backendIDDLEWARES ====================
-
 // Seguridad HTTP
 app.use(helmet());
-
-// CORS - Permitir peticiones desde el frontend
-// CORS - Permitir peticiones desde cualquier origen sin restricciones
-app.use(cors({
-  origin: '*',
-  methods: '*',
-  allowedHeaders: '*'
-}));
-
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
