@@ -13,21 +13,32 @@ const PORT = process.env.PORT || 5000;
 
 // ==================== MIDDLEWARES ====================
 
-// CORS - UNA SOLA VEZ, PRIMERO
-// CORS - Leer desde variables de entorno
-const corsOrigin = process.env.CORS_ORIGIN || '*';
-const corsMethods = process.env.CORS_METHODS || 'GET,POST,PUT,DELETE,OPTIONS';
-const corsHeaders = process.env.CORS_HEADERS || 'Content-Type,Authorization';
+// CORS MANUAL - FORZADO (ANTES DE TODO)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Manejar preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
+// CORS con librería (como respaldo)
 app.use(cors({
-  origin: corsOrigin,
+  origin: '*',
   credentials: true,
-  methods: corsMethods.split(','),
-  allowedHeaders: corsHeaders.split(',')
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Seguridad HTTP
-app.use(helmet());
+// Seguridad HTTP (con configuración permisiva para CORS)
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+}));
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));
