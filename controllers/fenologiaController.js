@@ -204,15 +204,20 @@ async function getDatosTurnoTresSemanas(req, res) {
         AND L.Lote = C.Lote
         AND DATEPART(iso_week, TBL.Fecha) = C.Semana
         AND YEAR(DATEADD(day, 26 - DATEPART(iso_week, TBL.Fecha), TBL.Fecha)) = C.Año
-      LEFT JOIN vw_TBL_Umbral_Fenologia U
-        ON F.Fundo = U.Fundo
-        AND M.Modulo = U.Modulo
-        AND T.SubTurno = U.Turno
-        AND L.Campaña = U.Campaña
-        AND V.Variedad = U.Variedad
-        AND U.Evaluacion = 'Fenologia'
-      WHERE L.idTurno = @idTurno 
-        AND E.Evaluacion = 'Fenologia'
+      LEFT JOIN LlaveUmbral LU
+      ON F.Fundo = LU.Fundo
+      AND M.Modulo = LU.Modulo
+      AND T.SubTurno = LU.Turno
+      AND L.Campaña = LU.Campaña
+      AND V.Variedad = LU.Variedad
+      AND LU.Evaluacion = 'Fenologia'
+    LEFT JOIN vw_TBL_Umbral_Fenologia U
+      ON LU.FundoComparativo = U.Fundo
+      AND LU.ModuloComparativo = U.Modulo
+      AND LU.TurnoComparativo = U.Turno
+      AND LU.CampañaComparativo = U.Campaña
+      AND LU.VariedadComparativo = U.Variedad
+      AND U.Evaluacion = 'Fenologia'
         AND YEAR(TBL.Fecha) = @maxAnio
         AND DATEPART(iso_week, TBL.Fecha) IN (${semanas.join(',')})
         AND TBL.Validacion != 0
