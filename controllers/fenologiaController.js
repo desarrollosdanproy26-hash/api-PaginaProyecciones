@@ -158,6 +158,10 @@ async function getDatosTurnoTresSemanas(req, res) {
         DATEPART(iso_week, TBL.Fecha) as Semana,
         CONVERT(VARCHAR(10), TBL.Fecha, 23) as Fecha,
         L.idLote, L.Lote,
+        -- EDAD CULTIVO Y UMBRAL
+        DATEDIFF(DAY, T.FechaSiembra, TBL.Fecha) AS EdadCultivo,
+        U.Umb_Alt as UmbralAltura,
+        -- CAMPOS EDITABLES
         TBL.AltPlant as AlturaPlanta,
         TBL.N_bot as Botones,
         TBL.N_Flor as Flores,
@@ -199,6 +203,13 @@ async function getDatosTurnoTresSemanas(req, res) {
         AND L.Lote = C.Lote
         AND DATEPART(iso_week, TBL.Fecha) = C.Semana
         AND YEAR(DATEADD(day, 26 - DATEPART(iso_week, TBL.Fecha), TBL.Fecha)) = C.Año
+      LEFT JOIN vw_TBL_Umbral_Fenologia U
+        ON F.Fundo = U.Fundo
+        AND M.Modulo = U.Modulo
+        AND T.SubTurno = U.Turno
+        AND L.Campaña = U.Campaña
+        AND V.Variedad = U.Variedad
+        AND U.Evaluacion = 'Fenologia'
       WHERE L.idTurno = @idTurno 
         AND E.Evaluacion = 'Fenologia'
         AND YEAR(TBL.Fecha) = @maxAnio
