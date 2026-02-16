@@ -83,6 +83,23 @@ async function getDatosTurnoTresSemanas(req, res) {
   try {
     const { idTurno } = req.params;
     const pool = await getConnection();
+    // CONSOLIDAR FRUTOS AUTOMÁTICAMENTE para este turno
+    await pool.request()
+      .input('idTurno', sql.Int, idTurno)
+      .query(`
+        UPDATE TBL_ProyeccionesPimiento
+        SET N_FrtN1 = ISNULL(N_FrtN1, 0) + ISNULL(N_FrtN2, 0) + ISNULL(N_FrtN3, 0) + 
+                      ISNULL(N_FrtN4, 0) + ISNULL(N_FrtN5, 0) + ISNULL(N_FrtN6, 0),
+            N_FrtN2 = 0,
+            N_FrtN3 = 0,
+            N_FrtN4 = 0,
+            N_FrtN5 = 0,
+            N_FrtN6 = 0
+        WHERE idLote IN (SELECT idLote FROM Lote WHERE idTurno = @idTurno)
+        AND IdEvaluacion IN (SELECT idEvaluacion FROM Evaluacion WHERE Evaluacion = 'Fenologia')
+        AND Validacion != 0
+        AND (N_FrtN2 != 0 OR N_FrtN3 != 0 OR N_FrtN4 != 0 OR N_FrtN5 != 0 OR N_FrtN6 != 0)
+      `);
 
     const infoResult = await pool.request()
       .input('idTurno', sql.Int, idTurno)
@@ -137,40 +154,57 @@ async function getDatosTurnoTresSemanas(req, res) {
       .input('idTurno', sql.Int, idTurno)
       .input('maxAnio', sql.Int, maxAnio)
       .query(`
-        SELECT 
-          DATEPART(iso_week, TBL.Fecha) as Semana,
-          CONVERT(VARCHAR(10), TBL.Fecha, 23) as Fecha,
-          L.idLote, L.Lote,
-          TBL.AltPlant as AlturaPlanta,
-          TBL.N_bot as Botones,
-          TBL.N_Flor as Flores,
-          TBL.N_Cuajas as Cuajas,
-          TBL.N_PC as PreCuajas,
-          TBL.N_CDeforP as CuajaDeforme,
-          TBL.N_CDA AS CuajasDañoAlternaria,
-          TBL.N_CDP as CuajaDañoProdi,
-          TBL.N_FrtN1 as FrutoNivel1,
-          TBL.N_FrtfQ as FrutosQuemados,
-          TBL.N_FrtFMD as FrutosDeformes,
-          TBL.N_FrtDeforL as DeformeLeve,
-          TBL.N_FrtTAPR as TipoAji,
-          TBL.N_FrtFA as FormaAji,
-          TBL.N_FrtDA as DañoAlternaria,
-          TBL.N_FrtDP as DañoProdiplosis,
-          TBL.N_FrtDescomp AS FrutosDescompuestos,
-          TBL.N_FrtDM AS DiametroMenor,
-          TBL.N_FrtDPR as DañoRoedores,
-          TBL.N_FrtDPP as DañoPajaros,
-          TBL.Validacion
-        FROM TBL_ProyeccionesPimiento TBL 
-        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
-        INNER JOIN Lote L ON L.idLote = TBL.idLote
-        WHERE L.idTurno = @idTurno 
-          AND E.Evaluacion = 'Fenologia'
-          AND YEAR(TBL.Fecha) = @maxAnio
-          AND DATEPART(iso_week, TBL.Fecha) IN (${semanas.join(',')})
-          AND TBL.Validacion != 0
-        ORDER BY DATEPART(iso_week, TBL.Fecha) ASC, L.Lote
+              SELECT 
+        DATEPART(iso_week, TBL.Fecha) as Semana,
+        CONVERT(VARCHAR(10), TBL.Fecha, 23) as Fecha,
+        L.idLote, L.Lote,
+        TBL.AltPlant as AlturaPlanta,
+        TBL.N_bot as Botones,
+        TBL.N_Flor as Flores,
+        TBL.N_Cuajas as Cuajas,
+        TBL.N_PC as PreCuajas,
+        TBL.N_CDeforP as CuajaDeforme,
+        TBL.N_CDA AS CuajasDañoAlternaria,
+        TBL.N_CDP as CuajaDañoProdi,
+        TBL.N_FrtN1 as FrutoNivel1,
+        TBL.N_FrtfQ as FrutosQuemados,
+        TBL.N_FrtFMD as FrutosDeformes,
+        TBL.N_FrtDeforL as DeformeLeve,
+        TBL.N_FrtTAPR as TipoAji,
+        TBL.N_FrtFA as FormaAji,
+        TBL.N_FrtDA as DañoAlternaria,
+        TBL.N_FrtDP as DañoProdiplosis,
+        TBL.N_FrtDescomp AS FrutosDescompuestos,
+        TBL.N_FrtDM AS DiametroMenor,
+        TBL.N_FrtDPR as DañoRoedores,
+        TBL.N_FrtDPP as DañoPajaros,
+        TBL.Validacion,
+        -- CAMPOS DE CONTEOS
+        C.VI, C.VT, C.M30, C.M50, C.M75,
+        C.P30, C.P50, C.P75, C.VMP30, C.VMP50, C.VMP75,
+        C.PN, C.NP, C.N, C.RM, C.R,
+        C.Craking, C.RajL, C.RajMod, C.RajS,
+        C.DeshL, C.DeshS, C.Virus, C.Trips,
+        C.PudBasal, C.DeficienciaCalcio, C.FrtCC
+      FROM TBL_ProyeccionesPimiento TBL 
+      INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+      INNER JOIN Lote L ON L.idLote = TBL.idLote
+      INNER JOIN Turno T ON T.idTurno = L.idTurno
+      INNER JOIN Modulo M ON M.idModulo = T.idModulo
+      INNER JOIN Fundo F ON F.idFundo = M.idFundo
+      LEFT JOIN vw_ConteosFeno C 
+        ON F.Fundo = C.Fundo
+        AND M.Modulo = C.Modulo
+        AND T.SubTurno = C.Turno
+        AND L.Lote = C.Lote
+        AND DATEPART(iso_week, TBL.Fecha) = C.Semana
+        AND YEAR(DATEADD(day, 26 - DATEPART(iso_week, TBL.Fecha), TBL.Fecha)) = C.Año
+      WHERE L.idTurno = @idTurno 
+        AND E.Evaluacion = 'Fenologia'
+        AND YEAR(TBL.Fecha) = @maxAnio
+        AND DATEPART(iso_week, TBL.Fecha) IN (${semanas.join(',')})
+        AND TBL.Validacion != 0
+      ORDER BY DATEPART(iso_week, TBL.Fecha) ASC, L.Lote
       `);
 
     const semanasDatos = semanas.map(numSemana => {
@@ -692,6 +726,7 @@ function distribuirValores(cantidad, promedio, min, max, esDecimal) {
   return valores.map(v => esDecimal ? Math.round(v * 10) / 10 : Math.round(v));
 }
 
+
 module.exports = {
   getFundos,
   getModulosByFundo,
@@ -701,5 +736,5 @@ module.exports = {
   actualizarRegistro,
   editarPromediosLote,
   editarPromediosTurno,
-  marcarTurnoRevisado
+  marcarTurnoRevisado,
 };

@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 5000;
 // ==================== CORS CONFIGURACIÓN CORRECTA ====================
 
 const FRONT_URL = 'http://portal-web-proyecciones-frontpagina-swik-cabe34-147-93-190-116.traefik.me';
+//const FRONT_URL = 'http://localhost:3000';
 
 app.use(cors({
   origin: FRONT_URL,
