@@ -196,7 +196,8 @@ async function getDatosTurnoTresSemanas(req, res) {
       INNER JOIN Turno T ON T.idTurno = L.idTurno
       INNER JOIN Modulo M ON M.idModulo = T.idModulo
       INNER JOIN Fundo F ON F.idFundo = M.idFundo
-      LEFT JOIN vw_ConteosFeno C 
+      INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
+      LEFT JOIN vw_ConteosFeno C
         ON F.Fundo = C.Fundo
         AND M.Modulo = C.Modulo
         AND T.SubTurno = C.Turno
