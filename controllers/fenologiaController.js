@@ -155,68 +155,90 @@ async function getDatosTurnoTresSemanas(req, res) {
       .input('maxAnio', sql.Int, maxAnio)
       .query(`
               SELECT 
-        DATEPART(iso_week, TBL.Fecha) as Semana,
-        CONVERT(VARCHAR(10), TBL.Fecha, 23) as Fecha,
-        L.idLote, L.Lote,
-        -- EDAD CULTIVO Y UMBRAL
-        DATEDIFF(DAY, T.FechaSiembra, TBL.Fecha) AS EdadCultivo,
-        U.Umb_Alt as UmbralAltura,
-        -- CAMPOS EDITABLES
-        TBL.AltPlant as AlturaPlanta,
-        TBL.N_bot as Botones,
-        TBL.N_Flor as Flores,
-        TBL.N_Cuajas as Cuajas,
-        TBL.N_PC as PreCuajas,
-        TBL.N_CDeforP as CuajaDeforme,
-        TBL.N_CDA AS CuajasDañoAlternaria,
-        TBL.N_CDP as CuajaDañoProdi,
-        TBL.N_FrtN1 as FrutoNivel1,
-        TBL.N_FrtfQ as FrutosQuemados,
-        TBL.N_FrtFMD as FrutosDeformes,
-        TBL.N_FrtDeforL as DeformeLeve,
-        TBL.N_FrtTAPR as TipoAji,
-        TBL.N_FrtFA as FormaAji,
-        TBL.N_FrtDA as DañoAlternaria,
-        TBL.N_FrtDP as DañoProdiplosis,
-        TBL.N_FrtDescomp AS FrutosDescompuestos,
-        TBL.N_FrtDM AS DiametroMenor,
-        TBL.N_FrtDPR as DañoRoedores,
-        TBL.N_FrtDPP as DañoPajaros,
-        TBL.Validacion,
-        -- CAMPOS DE CONTEOS
-        C.VI, C.VT, C.M30, C.M50, C.M75,
-        C.P30, C.P50, C.P75, C.VMP30, C.VMP50, C.VMP75,
-        C.PN, C.NP, C.N, C.RM, C.R,
-        C.Craking, C.RajL, C.RajMod, C.RajS,
-        C.DeshL, C.DeshS, C.Virus, C.Trips,
-        C.PudBasal, C.DeficienciaCalcio, C.FrtCC
-      FROM TBL_ProyeccionesPimiento TBL 
-      INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
-      INNER JOIN Lote L ON L.idLote = TBL.idLote
-      INNER JOIN Turno T ON T.idTurno = L.idTurno
-      INNER JOIN Modulo M ON M.idModulo = T.idModulo
-      INNER JOIN Fundo F ON F.idFundo = M.idFundo
-      INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
-      LEFT JOIN vw_ConteosFeno C
-        ON F.Fundo = C.Fundo
-        AND M.Modulo = C.Modulo
-        AND T.SubTurno = C.Turno
-        AND L.Lote = C.Lote
-        AND DATEPART(iso_week, TBL.Fecha) = C.Semana
-        AND YEAR(DATEADD(day, 26 - DATEPART(iso_week, TBL.Fecha), TBL.Fecha)) = C.Año
-      LEFT JOIN vw_TBL_Umbral_Fenologia U
-        ON F.Fundo = U.Fundo
-        AND M.Modulo = U.Modulo
-        AND T.SubTurno = U.Turno
-        AND L.Campaña = U.Campaña
-        AND V.Variedad = U.Variedad
-        AND U.Evaluacion = 'Fenologia'
-      WHERE L.idTurno = @idTurno 
-        AND E.Evaluacion = 'Fenologia'
-        AND YEAR(TBL.Fecha) = @maxAnio
-        AND DATEPART(iso_week, TBL.Fecha) IN (${semanas.join(',')})
-        AND TBL.Validacion != 0
-      ORDER BY DATEPART(iso_week, TBL.Fecha) ASC, L.Lote
+  DATEPART(iso_week, TBL.Fecha) as Semana,
+  CONVERT(VARCHAR(10), TBL.Fecha, 23) as Fecha,
+  L.idLote, L.Lote,
+  -- EDAD CULTIVO Y SEMANA CULTIVO
+  DATEDIFF(DAY, T.FechaSiembra, TBL.Fecha) AS EdadCultivo,
+  SC.SemanaCultivo,
+  U.Umb_Alt as UmbralAltura,
+  -- CAMPOS EDITABLES
+  TBL.AltPlant as AlturaPlanta,
+  TBL.N_bot as Botones,
+  TBL.N_Flor as Flores,
+  TBL.N_Cuajas as Cuajas,
+  TBL.N_PC as PreCuajas,
+  TBL.N_CDeforP as CuajaDeforme,
+  TBL.N_CDA AS CuajasDañoAlternaria,
+  TBL.N_CDP as CuajaDañoProdi,
+  TBL.N_FrtN1 as FrutoNivel1,
+  TBL.N_FrtfQ as FrutosQuemados,
+  TBL.N_FrtFMD as FrutosDeformes,
+  TBL.N_FrtDeforL as DeformeLeve,
+  TBL.N_FrtTAPR as TipoAji,
+  TBL.N_FrtFA as FormaAji,
+  TBL.N_FrtDA as DañoAlternaria,
+  TBL.N_FrtDP as DañoProdiplosis,
+  TBL.N_FrtDescomp AS FrutosDescompuestos,
+  TBL.N_FrtDM AS DiametroMenor,
+  TBL.N_FrtDPR as DañoRoedores,
+  TBL.N_FrtDPP as DañoPajaros,
+  TBL.Validacion,
+  -- CAMPOS DE CONTEOS
+  C.VI, C.VT, C.M30, C.M50, C.M75,
+  C.P30, C.P50, C.P75, C.VMP30, C.VMP50, C.VMP75,
+  C.PN, C.NP, C.N, C.RM, C.R,
+  C.Craking, C.RajL, C.RajMod, C.RajS,
+  C.DeshL, C.DeshS, C.Virus, C.Trips,
+  C.PudBasal, C.DeficienciaCalcio, C.FrtCC
+FROM TBL_ProyeccionesPimiento TBL 
+INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+INNER JOIN Lote L ON L.idLote = TBL.idLote
+INNER JOIN Turno T ON T.idTurno = L.idTurno
+INNER JOIN Modulo M ON M.idModulo = T.idModulo
+INNER JOIN Fundo F ON F.idFundo = M.idFundo
+INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
+-- Calcular SemanaCultivo UNA SOLA VEZ
+CROSS APPLY (
+  SELECT 
+    CASE 
+      WHEN TBL.Fecha < T.FechaSiembra THEN NULL
+      ELSE 
+        DATEDIFF(
+          DAY,
+          DATEADD(DAY, 1 - DATEPART(WEEKDAY, T.FechaSiembra), T.FechaSiembra),
+          DATEADD(DAY, 1 - DATEPART(WEEKDAY, TBL.Fecha), TBL.Fecha)
+        ) / 7
+    END AS SemanaCultivo
+) SC
+LEFT JOIN vw_ConteosFeno C
+  ON F.Fundo = C.Fundo
+  AND M.Modulo = C.Modulo
+  AND T.SubTurno = C.Turno
+  AND L.Lote = C.Lote
+  AND DATEPART(iso_week, TBL.Fecha) = C.Semana
+  AND YEAR(DATEADD(day, 26 - DATEPART(iso_week, TBL.Fecha), TBL.Fecha)) = C.Año
+LEFT JOIN LlaveUmbral LU
+  ON F.Fundo = LU.Fundo
+  AND M.Modulo = LU.Modulo
+  AND T.SubTurno = LU.Turno
+  AND L.Campaña = LU.Campaña
+  AND V.Variedad = LU.Variedad
+  AND LU.Evaluacion = 'Fenologia'
+LEFT JOIN TBL_Umbral U
+  ON LU.FundoComparativo = U.Fundo
+  AND LU.ModuloComparativo = U.Modulo
+  AND LU.TurnoComparativo = U.Turno
+  AND LU.CampañaComparativo = U.Campaña
+  AND LU.VariedadComparativo = U.Variedad
+  AND U.Evaluacion = 'Fenologia'
+  AND U.SemanaCultivo = SC.SemanaCultivo
+WHERE L.idTurno = @idTurno 
+  AND E.Evaluacion = 'Fenologia'
+  AND YEAR(TBL.Fecha) = @maxAnio
+  AND DATEPART(iso_week, TBL.Fecha) IN (${semanas.join(',')})
+  AND TBL.Validacion != 0
+ORDER BY DATEPART(iso_week, TBL.Fecha) ASC, L.Lote
       `);
 
     const semanasDatos = semanas.map(numSemana => {
