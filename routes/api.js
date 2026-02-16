@@ -5,7 +5,6 @@ const authController = require('../controllers/authController');
 const fenologiaController = require('../controllers/fenologiaController');
 const conteoFrutosController = require('../controllers/conteoFrutosController');
 
-
 // ==================== RUTAS DE AUTENTICACIÓN ====================
 
 // Login (pública)
@@ -20,54 +19,7 @@ router.post('/auth/change-password',
   authController.changePassword
 );
 
-// ==================== RUTAS DE TABLAS (PROTEGIDAS) ====================
-
-// Health check (pública)
-router.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    service: 'Proyecciones API'
-  });
-});
-
-// Todas las rutas siguientes requieren autenticación
-router.use(authController.authenticateToken);
-
-// Obtener todas las tablas disponibles
-router.get('/tables', tableController.getTables);
-
-// Obtener esquema de una tabla específica
-router.get('/tables/:tableName/schema', tableController.getTableSchema);
-
-// Obtener todos los registros de una tabla (con paginación)
-router.get('/tables/:tableName/data', tableController.getTableData);
-
-// Obtener un registro específico por ID
-router.get('/tables/:tableName/records/:id', tableController.getRecord);
-
-// Crear un nuevo registro (Asistente tiene permiso)
-router.post('/tables/:tableName/records', 
-  //authController.authorizeRoles('Asistente'),
-  tableController.createRecord
-);
-
-// Actualizar un registro existente (Asistente tiene permiso)
-router.put('/tables/:tableName/records/:id', 
-  //authController.authorizeRoles('Asistente'),
-  tableController.updateRecord
-);
-
-// Eliminar un registro (Asistente tiene permiso)
-router.delete('/tables/:tableName/records/:id', 
-  authController.authorizeRoles('Asistente'),
-  tableController.deleteRecord
-);
-
-// Obtener datos relacionados para foreign keys
-router.get('/tables/:tableName/related/:columnName', tableController.getRelatedData);
-
-// ==================== RUTAS DE FENOLOGÍA ====================
+// ==================== RUTAS DE FENOLOGÍA (NUEVAS) ====================
 
 // Obtener fundos
 router.get('/fenologia/fundos', fenologiaController.getFundos);
@@ -78,23 +30,23 @@ router.get('/fenologia/fundos/:idFundo/modulos', fenologiaController.getModulosB
 // Obtener turnos por módulo
 router.get('/fenologia/modulos/:idModulo/turnos', fenologiaController.getTurnosByModulo);
 
-// Obtener lotes por turno
-router.get('/fenologia/turnos/:idTurno/lotes', fenologiaController.getLotesByTurno);
+// Obtener datos de turno con 3 semanas
+router.get('/fenologia/turnos/:idTurno/tres-semanas', fenologiaController.getDatosTurnoTresSemanas);
 
-// Obtener datos de fenología por lote
-router.get('/fenologia/lotes/:idLote/datos', fenologiaController.getDatosFenologia);
+// Obtener datos de lote con 3 semanas
+router.get('/fenologia/lotes/:idLote/tres-semanas', fenologiaController.getDatosLoteTresSemanas);
 
-// Obtener promedios a nivel turno
-router.get('/fenologia/turnos/:idTurno/nivel-turno', fenologiaController.getDatosNivelTurno);
+// Actualizar registro individual (nivel muestra)
+router.put('/fenologia/registros/:id', fenologiaController.actualizarRegistro);
 
-// Obtener promedios a nivel lote
-router.get('/fenologia/lotes/:idLote/nivel-lote', fenologiaController.getDatosNivelLote);
+// Editar promedios a nivel lote
+router.put('/fenologia/lotes/:idLote/editar-promedios', fenologiaController.editarPromediosLote);
 
-// Actualizar registro de fenología
-router.put('/fenologia/registros/:id', 
-  //authController.authorizeRoles('Asistente'),
-  fenologiaController.actualizarRegistro
-);
+// Editar promedios a nivel turno
+router.put('/fenologia/turnos/:idTurno/editar-promedios', fenologiaController.editarPromediosTurno);
+
+// Marcar turno como revisado sin editar
+router.put('/fenologia/turnos/:idTurno/marcar-revisado', fenologiaController.marcarTurnoRevisado);
 
 // ==================== RUTAS DE CONTEO DE FRUTOS ====================
 
@@ -114,19 +66,6 @@ router.get('/conteofrutos/turnos/:idTurno/lotes', conteoFrutosController.getLote
 router.get('/conteofrutos/lotes/:idLote/datos', conteoFrutosController.getDatosConteo);
 
 // Actualizar registro de conteo
-router.put('/conteofrutos/registros/:id', 
-  //authController.authorizeRoles('Asistente'),
-  conteoFrutosController.actualizarRegistro
-);
-
-router.put('/fenologia/lotes/:idLote/cambiar-validacion', fenologiaController.cambiarValidacionLote);
-
-// ==================== RUTAS ESPECIALES ====================
-
-// Ejecutar query personalizado (Asistente tiene permiso)
-router.post('/query', 
-  authController.authorizeRoles('Asistente'),
-  tableController.executeQuery
-);
+router.put('/conteofrutos/registros/:id', conteoFrutosController.actualizarRegistro);
 
 module.exports = router;
