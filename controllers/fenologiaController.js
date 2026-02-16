@@ -234,6 +234,8 @@ async function getDatosTurnoTresSemanas(req, res) {
         idLote: lote.idLote,
         Lote: lote.Lote,
         fecha: lote.datos[0]?.Fecha || null,
+        EdadCultivo: lote.datos[0]?.EdadCultivo || null,
+        UmbralAltura: lote.datos[0]?.UmbralAltura || null,
         promedios: calcularPromedios(lote.datos),
         validacion: lote.datos[0]?.Validacion || 3
       }));
