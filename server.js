@@ -11,40 +11,30 @@ const { errorHandler, notFound, requestLogger } = require('./middleware/errorHan
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ==================== MIDDLEWARES ====================
+// ==================== CORS CONFIGURACIÓN CORRECTA ====================
 
-// CORS MANUAL - FORZADO (ANTES DE TODO)
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // Manejar preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+const FRONT_URL = 'http://portal-web-proyecciones-frontpagina-swik-cabe34-147-93-190-116.traefik.me';
 
-// CORS con librería (como respaldo)
 app.use(cors({
-  origin: '*',
+  origin: FRONT_URL,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Seguridad HTTP (con configuración permisiva para CORS)
+// ==================== SEGURIDAD ====================
+
 app.use(helmet({
   crossOriginResourcePolicy: false,
 }));
 
-// Body parser
+// ==================== BODY PARSER ====================
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logger
+// ==================== LOGGER ====================
+
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 } else {
@@ -58,75 +48,46 @@ app.get('/', (req, res) => {
   res.json({
     message: '🚀 API de Proyecciones',
     version: '1.0.0',
-    status: 'running',
-    endpoints: {
-      health: '/api/health',
-      tables: '/api/tables',
-      docs: 'Consultar README.md'
-    }
+    status: 'running'
   });
 });
 
 // API Routes
 app.use('/api', apiRoutes);
 
-// ==================== MANEJO DE ERRORES ====================
+// ==================== ERRORES ====================
 
-// Ruta no encontrada
 app.use(notFound);
-
-// Error handler global
 app.use(errorHandler);
 
 // ==================== INICIAR SERVIDOR ====================
 
 async function startServer() {
   try {
-    // Verificar conexión a la base de datos
     await getConnection();
-    console.log('✅ Conexión a base de datos establecida');
+    console.log('✅ Conectado a la base de datos');
 
-    // Iniciar servidor
     app.listen(PORT, () => {
-      console.log('╔════════════════════════════════════════╗');
-      console.log(`║  🚀 Servidor corriendo en puerto ${PORT}  ║`);
-      console.log('╠════════════════════════════════════════╣');
-      console.log(`║  📡 URL: http://localhost:${PORT}         ║`);
-      console.log(`║  🌍 Entorno: ${process.env.NODE_ENV || 'development'}         ║`);
-      console.log('╚════════════════════════════════════════╝');
+      console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Error al iniciar el servidor:', error);
+    console.error('❌ Error al iniciar:', error);
     process.exit(1);
   }
 }
 
-// ==================== MANEJO DE SEÑALES ====================
+// ==================== CIERRE SEGURO ====================
 
-// Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('🛑 SIGTERM recibido. Cerrando servidor...');
   await closeConnection();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-  console.log('🛑 SIGINT recibido. Cerrando servidor...');
   await closeConnection();
   process.exit(0);
 });
 
-// Manejo de promesas rechazadas
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Promesa rechazada no manejada:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('❌ Excepción no capturada:', error);
-  process.exit(1);
-});
-
-// Iniciar servidor
 startServer();
 
 module.exports = app;
