@@ -158,11 +158,12 @@ async function getDatosTurnoTresSemanas(req, res) {
   DATEPART(iso_week, TBL.Fecha) as Semana,
   CONVERT(VARCHAR(10), TBL.Fecha, 23) as Fecha,
   L.idLote, L.Lote,
-  -- EDAD CULTIVO Y SEMANA CULTIVO
   DATEDIFF(DAY, T.FechaSiembra, TBL.Fecha) AS EdadCultivo,
-  SC.SemanaCultivo,
+  CASE 
+    WHEN TBL.Fecha < T.FechaSiembra THEN NULL
+    ELSE DATEDIFF(DAY, DATEADD(DAY, 1 - DATEPART(WEEKDAY, T.FechaSiembra), T.FechaSiembra), DATEADD(DAY, 1 - DATEPART(WEEKDAY, TBL.Fecha), TBL.Fecha)) / 7
+  END AS SemanaCultivo,
   U.Umb_Alt as UmbralAltura,
-  -- CAMPOS EDITABLES
   TBL.AltPlant as AlturaPlanta,
   TBL.N_bot as Botones,
   TBL.N_Flor as Flores,
@@ -184,7 +185,6 @@ async function getDatosTurnoTresSemanas(req, res) {
   TBL.N_FrtDPR as DañoRoedores,
   TBL.N_FrtDPP as DañoPajaros,
   TBL.Validacion,
-  -- CAMPOS DE CONTEOS
   C.VI, C.VT, C.M30, C.M50, C.M75,
   C.P30, C.P50, C.P75, C.VMP30, C.VMP50, C.VMP75,
   C.PN, C.NP, C.N, C.RM, C.R,
@@ -198,33 +198,17 @@ INNER JOIN Turno T ON T.idTurno = L.idTurno
 INNER JOIN Modulo M ON M.idModulo = T.idModulo
 INNER JOIN Fundo F ON F.idFundo = M.idFundo
 INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
--- Calcular SemanaCultivo UNA SOLA VEZ
-CROSS APPLY (
-  SELECT 
-    CASE 
-      WHEN TBL.Fecha < T.FechaSiembra THEN NULL
-      ELSE 
-        DATEDIFF(
-          DAY,
-          DATEADD(DAY, 1 - DATEPART(WEEKDAY, T.FechaSiembra), T.FechaSiembra),
-          DATEADD(DAY, 1 - DATEPART(WEEKDAY, TBL.Fecha), TBL.Fecha)
-        ) / 7
-    END AS SemanaCultivo
-) SC
--- Llave del turno actual
-CROSS APPLY (
-  SELECT CONCAT(F.Fundo, '-', M.Modulo, '-', T.SubTurno) AS LlaveTurno
-) LT
--- JOIN con Llave Umbral
-LEFT JOIN vw_TBL_Llave_Umbral LU
-  ON LT.LlaveTurno = LU.llave
--- Llave del umbral
-CROSS APPLY (
-  SELECT CONCAT(LU.llaveComp, '-', SC.SemanaCultivo, '-', V.Variedad) AS LlaveUmbral
-) LLU
--- JOIN con Umbral
-LEFT JOIN vw_TBL_Umbral_Fenologia U
-  ON LLU.LlaveUmbral = U.llave
+LEFT JOIN vw_TBL_Llave_Umbral LU 
+  ON CONCAT(F.Fundo, '-', M.Modulo, '-', T.SubTurno) = LU.llave
+LEFT JOIN vw_TBL_Umbral_Fenologia U 
+  ON U.llave = CONCAT(
+       LU.llaveComp, '-',
+       CASE 
+         WHEN TBL.Fecha < T.FechaSiembra THEN NULL
+         ELSE DATEDIFF(DAY, DATEADD(DAY, 1 - DATEPART(WEEKDAY, T.FechaSiembra), T.FechaSiembra), DATEADD(DAY, 1 - DATEPART(WEEKDAY, TBL.Fecha), TBL.Fecha)) / 7
+       END,
+       '-', V.Variedad
+     )
   AND U.Evaluacion = 'Fenologia'
 LEFT JOIN vw_ConteosFeno C
   ON F.Fundo = C.Fundo
@@ -233,7 +217,7 @@ LEFT JOIN vw_ConteosFeno C
   AND L.Lote = C.Lote
   AND DATEPART(iso_week, TBL.Fecha) = C.Semana
   AND YEAR(DATEADD(day, 26 - DATEPART(iso_week, TBL.Fecha), TBL.Fecha)) = C.Año
-WHERE L.idTurno = @idTurno
+WHERE L.idTurno = @idTurno 
   AND E.Evaluacion = 'Fenologia'
   AND YEAR(TBL.Fecha) = @maxAnio
   AND DATEPART(iso_week, TBL.Fecha) IN (${semanas.join(',')})
