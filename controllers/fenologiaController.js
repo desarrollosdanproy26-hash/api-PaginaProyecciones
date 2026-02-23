@@ -164,110 +164,31 @@ async function getDatosTurnoTresSemanas(req, res) {
 
     const semanas = semanasResult.recordset.map(r => r.Semana).reverse();
 
-    const result = await pool.request()
-      .input('idTurno', sql.Int, idTurno)
-      .input('maxAnio', sql.Int, maxAnio)
-      .query(`
-              SELECT 
-  DATEPART(iso_week, TBL.Fecha) as Semana,
-  CONVERT(VARCHAR(10), TBL.Fecha, 23) as Fecha,
-  L.idLote, L.Lote,
-  DATEDIFF(DAY, T.FechaSiembra, TBL.Fecha) AS EdadCultivo,
-  CASE 
-    WHEN TBL.Fecha < T.FechaSiembra THEN NULL
-    ELSE DATEDIFF(DAY, DATEADD(DAY, 1 - DATEPART(WEEKDAY, T.FechaSiembra), T.FechaSiembra), DATEADD(DAY, 1 - DATEPART(WEEKDAY, TBL.Fecha), TBL.Fecha)) / 7
-  END AS SemanaCultivo,
-  U.Umb_Alt as UmbralAltura,
-  TBL.AltPlant as AlturaPlanta,
-  TBL.N_bot as Botones,
-  TBL.N_Flor as Flores,
-  TBL.N_Cuajas as Cuajas,
-  TBL.N_PC as PreCuajas,
-  TBL.N_CDeforP as CuajaDeforme,
-  TBL.N_CDA AS CuajasDañoAlternaria,
-  TBL.N_CDP as CuajaDañoProdi,
-  TBL.N_FrtN1 as FrutoNivel1,
-  TBL.N_FrtfQ as FrutosQuemados,
-  TBL.N_FrtFMD as FrutosDeformes,
-  TBL.N_FrtDeforL as DeformeLeve,
-  TBL.N_FrtTAPR as TipoAji,
-  TBL.N_FrtFA as FormaAji,
-  TBL.N_FrtDA as DañoAlternaria,
-  TBL.N_FrtDP as DañoProdiplosis,
-  TBL.N_FrtDescomp AS FrutosDescompuestos,
-  TBL.N_FrtDM AS DiametroMenor,
-  TBL.N_FrtDPR as DañoRoedores,
-  TBL.N_FrtDPP as DañoPajaros,
-  TBL.Validacion,
-  C.VI, C.VT, C.M30, C.M50, C.M75,
-  C.P30, C.P50, C.P75, C.VMP30, C.VMP50, C.VMP75,
-  C.PN, C.NP, C.N, C.RM, C.R,
-  C.Craking, C.RajL, C.RajMod, C.RajS,
-  C.DeshL, C.DeshS, C.Virus, C.Trips,
-  C.PudBasal, C.DeficienciaCalcio, C.FrtCC
-FROM TBL_ProyeccionesPimiento TBL 
-INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
-INNER JOIN Lote L ON L.idLote = TBL.idLote
-INNER JOIN Turno T ON T.idTurno = L.idTurno
-INNER JOIN Modulo M ON M.idModulo = T.idModulo
-INNER JOIN Fundo F ON F.idFundo = M.idFundo
-INNER JOIN Variedad V ON V.idVariedad = L.idVariedad
-LEFT JOIN vw_TBL_Llave_Umbral LU 
-  ON CONCAT(F.Fundo, '-', M.Modulo, '-', T.SubTurno) = LU.llave
-LEFT JOIN vw_TBL_Umbral_Fenologia U 
-  ON U.llave = CONCAT(
-       LU.llaveComp, '-',
-       CASE 
-         WHEN TBL.Fecha < T.FechaSiembra THEN NULL
-         ELSE DATEDIFF(DAY, DATEADD(DAY, 1 - DATEPART(WEEKDAY, T.FechaSiembra), T.FechaSiembra), DATEADD(DAY, 1 - DATEPART(WEEKDAY, TBL.Fecha), TBL.Fecha)) / 7
-       END,
-       '-', V.Variedad
-     )
-  AND U.Evaluacion = 'Fenologia'
-LEFT JOIN (
-  SELECT 
-    L2.idLote,
-    DATEPART(iso_week, TBL2.FechaMod) AS Semana,
-    YEAR(DATEADD(day, 26 - DATEPART(iso_week, TBL2.FechaMod), TBL2.FechaMod)) AS Año,
-    AVG(TBL2.N_FrtVI) AS VI, AVG(TBL2.N_FrtVT) AS VT,
-    AVG(TBL2.N_FrtM30) AS M30, AVG(TBL2.N_FrtM50) AS M50, AVG(TBL2.N_FrtM75) AS M75,
-    AVG(TBL2.N_FrtP30) AS P30, AVG(TBL2.N_FrtP50) AS P50, AVG(TBL2.N_FrtP75) AS P75,
-    AVG(TBL2.N_FrtVMP30) AS VMP30, AVG(TBL2.N_FrtVMP50) AS VMP50, AVG(TBL2.N_FrtVMP75) AS VMP75,
-    AVG(TBL2.N_FrtPN) AS PN, AVG(TBL2.N_FrtNP) AS NP, AVG(TBL2.N_FrtN) AS N,
-    AVG(TBL2.N_FrtRM) AS RM, AVG(TBL2.N_FrtR) AS R,
-    AVG(TBL2.N_FrtFC) AS Craking, AVG(TBL2.N_FrtRL) AS RajL,
-    AVG(TBL2.N_FrtRajMod) AS RajMod, AVG(TBL2.N_FrtRS) AS RajS,
-    AVG(TBL2.N_FrtDeshL) AS DeshL, AVG(TBL2.N_FrtDS) AS DeshS,
-    AVG(TBL2.N_FrtFV) AS Virus, AVG(TBL2.N_FrtDPT) AS Trips,
-    AVG(TBL2.N_FrtPB) AS PudBasal, AVG(TBL2.N_FrtDC) AS DeficienciaCalcio,
-    AVG(ISNULL(TBL2.N_FrtVI,0)+ISNULL(TBL2.N_FrtVT,0)+ISNULL(TBL2.N_FrtM30,0)+
-        ISNULL(TBL2.N_FrtM50,0)+ISNULL(TBL2.N_FrtM75,0)+ISNULL(TBL2.N_FrtP30,0)+
-        ISNULL(TBL2.N_FrtP50,0)+ISNULL(TBL2.N_FrtP75,0)+ISNULL(TBL2.N_FrtVMP30,0)+
-        ISNULL(TBL2.N_FrtVMP50,0)+ISNULL(TBL2.N_FrtVMP75,0)+ISNULL(TBL2.N_FrtN,0)+
-        ISNULL(TBL2.N_FrtNP,0)+ISNULL(TBL2.N_FrtPN,0)+ISNULL(TBL2.N_FrtR,0)+
-        ISNULL(TBL2.N_FrtRM,0)+ISNULL(TBL2.N_FrtRL,0)+ISNULL(TBL2.N_FrtRajMod,0)+
-        ISNULL(TBL2.N_FrtFC,0)+ISNULL(TBL2.N_FrtDeshL,0)+ISNULL(TBL2.N_FrtDeforL,0)+
-        ISNULL(TBL2.N_FrtTAPR,0)) AS FrtCC
-  FROM TBL_ProyeccionesPimiento TBL2
-  INNER JOIN Evaluacion E2 ON E2.idEvaluacion = TBL2.IdEvaluacion
-  INNER JOIN Lote L2 ON L2.idLote = TBL2.idLote
-  WHERE L2.idTurno = @idTurno
-    AND E2.Evaluacion = 'Conteos'
-    AND TBL2.Validacion = 1
-    AND TBL2.CLASIFICACION = 'Oficial'
-  GROUP BY L2.idLote, DATEPART(iso_week, TBL2.FechaMod),
-    YEAR(DATEADD(day, 26 - DATEPART(iso_week, TBL2.FechaMod), TBL2.FechaMod))
-) C ON C.idLote = L.idLote
-  AND DATEPART(iso_week, TBL.Fecha) = C.Semana
-  AND YEAR(DATEADD(day, 26 - DATEPART(iso_week, TBL.Fecha), TBL.Fecha)) = C.Año
-WHERE L.idTurno = @idTurno 
-  AND E.Evaluacion = 'Fenologia'
-  AND YEAR(TBL.Fecha) = @maxAnio
-  AND DATEPART(iso_week, TBL.Fecha) IN (${semanas.join(',')})
-  AND TBL.Validacion != 0
-ORDER BY DATEPART(iso_week, TBL.Fecha) ASC, L.Lote
-      `);
-
+   const result = await pool.request()
+  .input('idTurno', sql.Int, idTurno)
+  .input('maxAnio', sql.Int, maxAnio)
+  .query(`
+    SELECT 
+      v.Semana, v.Fecha, v.idLote, v.Lote,
+      v.EdadCultivo, v.AlturaPlanta, v.Botones, v.Flores,
+      v.Cuajas, v.PreCuajas, v.CuajaDeforme, v.CuajasDañoAlternaria,
+      v.CuajaDañoProdi, v.FrutoNivel1, v.FrutosQuemados, v.FrutosDeformes,
+      v.DeformeLeve, v.TipoAji, v.FormaAji, v.DañoAlternaria,
+      v.DañoProdiplosis, v.FrutosDescompuestos, v.DiametroMenor,
+      v.DañoRoedores, v.DañoPajaros, v.Validacion,
+      v.VI, v.VT, v.M30, v.M50, v.M75,
+      v.P30, v.P50, v.P75, v.VMP30, v.VMP50, v.VMP75,
+      v.PN, v.NP, v.N, v.RM, v.R,
+      v.Craking, v.RajL, v.RajMod, v.RajS,
+      v.DeshL, v.DeshS, v.Virus, v.Trips,
+      v.PudBasal, v.DeficienciaCalcio, v.FrtCC,
+      NULL AS UmbralAltura
+    FROM vw_FenologiaPortalWeb v
+    WHERE v.idTurno = @idTurno
+      AND v.Año = @maxAnio
+      AND v.Semana IN (${semanas.join(',')})
+    ORDER BY v.Semana ASC, v.Lote
+  `);
     const semanasDatos = semanas.map(numSemana => {
       const datosSemana = result.recordset.filter(r => r.Semana === numSemana);
       const lotes = {};
