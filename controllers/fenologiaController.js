@@ -83,23 +83,37 @@ async function getDatosTurnoTresSemanas(req, res) {
   try {
     const { idTurno } = req.params;
     const pool = await getConnection();
-    // CONSOLIDAR FRUTOS AUTOMÁTICAMENTE para este turno
-    await pool.request()
+
+    // CONSOLIDAR FRUTOS AUTOMÁTICAMENTE para este turno (solo si hay datos que consolidar)
+    const necesitaConsolidar = await pool.request()
       .input('idTurno', sql.Int, idTurno)
       .query(`
-        UPDATE TBL_ProyeccionesPimiento
-        SET N_FrtN1 = ISNULL(N_FrtN1, 0) + ISNULL(N_FrtN2, 0) + ISNULL(N_FrtN3, 0) + 
-                      ISNULL(N_FrtN4, 0) + ISNULL(N_FrtN5, 0) + ISNULL(N_FrtN6, 0),
-            N_FrtN2 = 0,
-            N_FrtN3 = 0,
-            N_FrtN4 = 0,
-            N_FrtN5 = 0,
-            N_FrtN6 = 0
+        SELECT TOP 1 1 as hay
+        FROM TBL_ProyeccionesPimiento
         WHERE idLote IN (SELECT idLote FROM Lote WHERE idTurno = @idTurno)
         AND IdEvaluacion IN (SELECT idEvaluacion FROM Evaluacion WHERE Evaluacion = 'Fenologia')
         AND Validacion != 0
         AND (N_FrtN2 != 0 OR N_FrtN3 != 0 OR N_FrtN4 != 0 OR N_FrtN5 != 0 OR N_FrtN6 != 0)
       `);
+
+    if (necesitaConsolidar.recordset.length > 0) {
+      await pool.request()
+        .input('idTurno', sql.Int, idTurno)
+        .query(`
+          UPDATE TBL_ProyeccionesPimiento
+          SET N_FrtN1 = ISNULL(N_FrtN1, 0) + ISNULL(N_FrtN2, 0) + ISNULL(N_FrtN3, 0) + 
+                        ISNULL(N_FrtN4, 0) + ISNULL(N_FrtN5, 0) + ISNULL(N_FrtN6, 0),
+              N_FrtN2 = 0,
+              N_FrtN3 = 0,
+              N_FrtN4 = 0,
+              N_FrtN5 = 0,
+              N_FrtN6 = 0
+          WHERE idLote IN (SELECT idLote FROM Lote WHERE idTurno = @idTurno)
+          AND IdEvaluacion IN (SELECT idEvaluacion FROM Evaluacion WHERE Evaluacion = 'Fenologia')
+          AND Validacion != 0
+          AND (N_FrtN2 != 0 OR N_FrtN3 != 0 OR N_FrtN4 != 0 OR N_FrtN5 != 0 OR N_FrtN6 != 0)
+        `);
+    }
 
     const infoResult = await pool.request()
       .input('idTurno', sql.Int, idTurno)
