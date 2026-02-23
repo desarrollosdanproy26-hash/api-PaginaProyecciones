@@ -261,7 +261,7 @@ ORDER BY DATEPART(iso_week, TBL.Fecha) ASC, L.Lote
     res.json({ success: true, variedad, modulo, turno, subturno, semanas: semanasDatos });
   } catch (err) {
     console.error('❌ Error al obtener datos turno:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message, stack: err.toString() }); 
   }
 }
 
