@@ -84,7 +84,6 @@ async function getDatosTurnoTresSemanas(req, res) {
     const { idTurno } = req.params;
     const pool = await getConnection();
 
-    // CONSOLIDAR FRUTOS AUTOMÁTICAMENTE para este turno (solo si hay datos que consolidar)
     const necesitaConsolidar = await pool.request()
       .input('idTurno', sql.Int, idTurno)
       .query(`
@@ -191,46 +190,58 @@ async function getDatosTurnoTresSemanas(req, res) {
           TBL.N_FrtDPR AS DañoRoedores,
           TBL.N_FrtDPP AS DañoPajaros,
           TBL.Validacion,
-          C.N_FrtVI AS VI, C.N_FrtVT AS VT,
-          C.N_FrtM30 AS M30, C.N_FrtM50 AS M50, C.N_FrtM75 AS M75,
-          C.N_FrtP30 AS P30, C.N_FrtP50 AS P50, C.N_FrtP75 AS P75,
-          C.N_FrtVMP30 AS VMP30, C.N_FrtVMP50 AS VMP50, C.N_FrtVMP75 AS VMP75,
-          C.N_FrtPN AS PN, C.N_FrtNP AS NP, C.N_FrtN AS N,
-          C.N_FrtRM AS RM, C.N_FrtR AS R,
-          C.N_FrtFC AS Craking, C.N_FrtRL AS RajL, C.N_FrtRajMod AS RajMod, C.N_FrtRS AS RajS,
-          C.N_FrtDeshL AS DeshL, C.N_FrtDS AS DeshS,
-          C.N_FrtFV AS Virus, C.N_FrtDPT AS Trips,
-          C.N_FrtPB AS PudBasal, C.N_FrtDC AS DeficienciaCalcio,
-          C.N_FrtFA AS FormaAji_c,
-          C.N_FrtTAPR AS TipoAji_c,
-          C.N_FrtDescomp AS Descomp,
-          C.N_FrtDP AS Prodiplosis,
-          C.N_FrtDA AS Alternaria,
-          C.N_FrtDPP AS Pajaro,
-          C.N_FrtDPR AS Roedores,
-          C.N_FrtDM AS DiaMenor,
-          C.N_FrtFQ AS Quemado,
-          C.N_FrtFMD AS DeforS,
-          C.N_FrtDeforL AS DeforL,
-          (ISNULL(C.N_FrtVI,0)+ISNULL(C.N_FrtVT,0)+ISNULL(C.N_FrtM30,0)+
-           ISNULL(C.N_FrtM50,0)+ISNULL(C.N_FrtM75,0)+ISNULL(C.N_FrtP30,0)+
-           ISNULL(C.N_FrtP50,0)+ISNULL(C.N_FrtP75,0)+ISNULL(C.N_FrtVMP30,0)+
-           ISNULL(C.N_FrtVMP50,0)+ISNULL(C.N_FrtVMP75,0)+ISNULL(C.N_FrtN,0)+
-           ISNULL(C.N_FrtNP,0)+ISNULL(C.N_FrtPN,0)+ISNULL(C.N_FrtR,0)+
-           ISNULL(C.N_FrtRM,0)+ISNULL(C.N_FrtRL,0)+ISNULL(C.N_FrtRajMod,0)+
-           ISNULL(C.N_FrtFC,0)+ISNULL(C.N_FrtDeshL,0)+ISNULL(C.N_FrtDeforL,0)+
-           ISNULL(C.N_FrtTAPR,0)) AS FrtCC
+          C.VI, C.VT, C.M30, C.M50, C.M75,
+          C.P30, C.P50, C.P75,
+          C.VMP30, C.VMP50, C.VMP75,
+          C.PN, C.NP, C.N, C.RM, C.R,
+          C.Craking, C.RajL, C.RajMod, C.RajS,
+          C.DeshL, C.DeshS, C.Virus, C.Trips,
+          C.PudBasal, C.DeficienciaCalcio,
+          C.FormaAji_c, C.TipoAji_c,
+          C.Descomp, C.Prodiplosis, C.Alternaria,
+          C.Pajaro, C.Roedores, C.DiaMenor,
+          C.Quemado, C.DeforS, C.DeforL, C.FrtCC
         FROM TBL_ProyeccionesPimiento TBL
         INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
         INNER JOIN Lote L ON L.idLote = TBL.idLote
         INNER JOIN Turno T ON T.idTurno = L.idTurno
-        LEFT JOIN TBL_ProyeccionesPimiento C 
-          ON C.idLote = TBL.idLote
-          AND DATEPART(iso_week, C.FechaMod) = DATEPART(iso_week, TBL.Fecha)
-          AND YEAR(DATEADD(day, 26 - DATEPART(iso_week, C.FechaMod), C.FechaMod)) = @maxAnio
-          AND C.Validacion = 1
-          AND C.CLASIFICACION = 'Oficial'
-          AND C.IdEvaluacion IN (SELECT idEvaluacion FROM Evaluacion WHERE Evaluacion = 'Conteos')
+        LEFT JOIN (
+          SELECT 
+            C.idLote,
+            DATEPART(iso_week, C.FechaMod) AS Semana,
+            AVG(C.N_FrtVI) AS VI, AVG(C.N_FrtVT) AS VT,
+            AVG(C.N_FrtM30) AS M30, AVG(C.N_FrtM50) AS M50, AVG(C.N_FrtM75) AS M75,
+            AVG(C.N_FrtP30) AS P30, AVG(C.N_FrtP50) AS P50, AVG(C.N_FrtP75) AS P75,
+            AVG(C.N_FrtVMP30) AS VMP30, AVG(C.N_FrtVMP50) AS VMP50, AVG(C.N_FrtVMP75) AS VMP75,
+            AVG(C.N_FrtPN) AS PN, AVG(C.N_FrtNP) AS NP, AVG(C.N_FrtN) AS N,
+            AVG(C.N_FrtRM) AS RM, AVG(C.N_FrtR) AS R,
+            AVG(C.N_FrtFC) AS Craking, AVG(C.N_FrtRL) AS RajL,
+            AVG(C.N_FrtRajMod) AS RajMod, AVG(C.N_FrtRS) AS RajS,
+            AVG(C.N_FrtDeshL) AS DeshL, AVG(C.N_FrtDS) AS DeshS,
+            AVG(C.N_FrtFV) AS Virus, AVG(C.N_FrtDPT) AS Trips,
+            AVG(C.N_FrtPB) AS PudBasal, AVG(C.N_FrtDC) AS DeficienciaCalcio,
+            AVG(C.N_FrtFA) AS FormaAji_c, AVG(C.N_FrtTAPR) AS TipoAji_c,
+            AVG(C.N_FrtDescomp) AS Descomp, AVG(C.N_FrtDP) AS Prodiplosis,
+            AVG(C.N_FrtDA) AS Alternaria, AVG(C.N_FrtDPP) AS Pajaro,
+            AVG(C.N_FrtDPR) AS Roedores, AVG(C.N_FrtDM) AS DiaMenor,
+            AVG(C.N_FrtFQ) AS Quemado, AVG(C.N_FrtFMD) AS DeforS,
+            AVG(C.N_FrtDeforL) AS DeforL,
+            AVG(ISNULL(C.N_FrtVI,0)+ISNULL(C.N_FrtVT,0)+ISNULL(C.N_FrtM30,0)+
+                ISNULL(C.N_FrtM50,0)+ISNULL(C.N_FrtM75,0)+ISNULL(C.N_FrtP30,0)+
+                ISNULL(C.N_FrtP50,0)+ISNULL(C.N_FrtP75,0)+ISNULL(C.N_FrtVMP30,0)+
+                ISNULL(C.N_FrtVMP50,0)+ISNULL(C.N_FrtVMP75,0)+ISNULL(C.N_FrtN,0)+
+                ISNULL(C.N_FrtNP,0)+ISNULL(C.N_FrtPN,0)+ISNULL(C.N_FrtR,0)+
+                ISNULL(C.N_FrtRM,0)+ISNULL(C.N_FrtRL,0)+ISNULL(C.N_FrtRajMod,0)+
+                ISNULL(C.N_FrtFC,0)+ISNULL(C.N_FrtDeshL,0)+ISNULL(C.N_FrtDeforL,0)+
+                ISNULL(C.N_FrtTAPR,0)) AS FrtCC
+          FROM TBL_ProyeccionesPimiento C
+          INNER JOIN Evaluacion E2 ON E2.idEvaluacion = C.IdEvaluacion
+          WHERE E2.Evaluacion = 'Conteos'
+            AND C.Validacion = 1
+            AND C.CLASIFICACION = 'Oficial'
+          GROUP BY C.idLote, DATEPART(iso_week, C.FechaMod)
+        ) C ON C.idLote = L.idLote
+          AND C.Semana = DATEPART(iso_week, TBL.Fecha)
         WHERE L.idTurno = @idTurno
           AND E.Evaluacion = 'Fenologia'
           AND YEAR(TBL.Fecha) = @maxAnio
@@ -260,7 +271,6 @@ async function getDatosTurnoTresSemanas(req, res) {
         validacion: lote.datos[0]?.Validacion || 3
       }));
 
-      // Promedio general correcto: promedio de promedios de lote
       const promedioGeneral = calcularPromedios(lotesConPromedios.map(l => l.promedios));
       const esUltimaSemana = numSemana === semanas[semanas.length - 1];
       const hayValidacion2 = datosSemana.some(d => d.Validacion === 2 || d.Validacion === 1);
@@ -706,8 +716,8 @@ function calcularPromedios(datos) {
     'Craking', 'RajL', 'RajMod', 'RajS', 'DeshL', 'DeshS',
     'Virus', 'Trips', 'PudBasal', 'DeficienciaCalcio', 'FrtCC',
     'FormaAji_c', 'TipoAji_c', 'Descomp', 'Prodiplosis',
-  'Alternaria', 'Pajaro', 'Roedores', 'DiaMenor',
-  'Quemado', 'DeforS', 'DeforL'
+    'Alternaria', 'Pajaro', 'Roedores', 'DiaMenor',
+    'Quemado', 'DeforS', 'DeforL'
   ];
 
   const promedios = {};
