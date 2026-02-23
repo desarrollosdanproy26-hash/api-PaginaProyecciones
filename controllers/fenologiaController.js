@@ -201,6 +201,17 @@ async function getDatosTurnoTresSemanas(req, res) {
           C.N_FrtDeshL AS DeshL, C.N_FrtDS AS DeshS,
           C.N_FrtFV AS Virus, C.N_FrtDPT AS Trips,
           C.N_FrtPB AS PudBasal, C.N_FrtDC AS DeficienciaCalcio,
+          C.N_FrtFA AS FormaAji_c,
+          C.N_FrtTAPR AS TipoAji_c,
+          C.N_FrtDescomp AS Descomp,
+          C.N_FrtDP AS Prodiplosis,
+          C.N_FrtDA AS Alternaria,
+          C.N_FrtDPP AS Pajaro,
+          C.N_FrtDPR AS Roedores,
+          C.N_FrtDM AS DiaMenor,
+          C.N_FrtFQ AS Quemado,
+          C.N_FrtFMD AS DeforS,
+          C.N_FrtDeforL AS DeforL,
           (ISNULL(C.N_FrtVI,0)+ISNULL(C.N_FrtVT,0)+ISNULL(C.N_FrtM30,0)+
            ISNULL(C.N_FrtM50,0)+ISNULL(C.N_FrtM75,0)+ISNULL(C.N_FrtP30,0)+
            ISNULL(C.N_FrtP50,0)+ISNULL(C.N_FrtP75,0)+ISNULL(C.N_FrtVMP30,0)+
