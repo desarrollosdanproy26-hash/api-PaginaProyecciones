@@ -704,7 +704,10 @@ function calcularPromedios(datos) {
     'VI', 'VT', 'M30', 'M50', 'M75', 'P30', 'P50', 'P75',
     'VMP30', 'VMP50', 'VMP75', 'PN', 'NP', 'N', 'RM', 'R',
     'Craking', 'RajL', 'RajMod', 'RajS', 'DeshL', 'DeshS',
-    'Virus', 'Trips', 'PudBasal', 'DeficienciaCalcio', 'FrtCC'
+    'Virus', 'Trips', 'PudBasal', 'DeficienciaCalcio', 'FrtCC',
+    'FormaAji_c', 'TipoAji_c', 'Descomp', 'Prodiplosis',
+  'Alternaria', 'Pajaro', 'Roedores', 'DiaMenor',
+  'Quemado', 'DeforS', 'DeforL'
   ];
 
   const promedios = {};
