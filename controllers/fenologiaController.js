@@ -103,11 +103,7 @@ async function getDatosTurnoTresSemanas(req, res) {
           UPDATE TBL_ProyeccionesPimiento
           SET N_FrtN1 = ISNULL(N_FrtN1, 0) + ISNULL(N_FrtN2, 0) + ISNULL(N_FrtN3, 0) + 
                         ISNULL(N_FrtN4, 0) + ISNULL(N_FrtN5, 0) + ISNULL(N_FrtN6, 0),
-              N_FrtN2 = 0,
-              N_FrtN3 = 0,
-              N_FrtN4 = 0,
-              N_FrtN5 = 0,
-              N_FrtN6 = 0
+              N_FrtN2 = 0, N_FrtN3 = 0, N_FrtN4 = 0, N_FrtN5 = 0, N_FrtN6 = 0
           WHERE idLote IN (SELECT idLote FROM Lote WHERE idTurno = @idTurno)
           AND IdEvaluacion IN (SELECT idEvaluacion FROM Evaluacion WHERE Evaluacion = 'Fenologia')
           AND Validacion != 0
@@ -164,31 +160,74 @@ async function getDatosTurnoTresSemanas(req, res) {
 
     const semanas = semanasResult.recordset.map(r => r.Semana).reverse();
 
-   const result = await pool.request()
-  .input('idTurno', sql.Int, idTurno)
-  .input('maxAnio', sql.Int, maxAnio)
-  .query(`
-    SELECT 
-      v.Semana, v.Fecha, v.idLote, v.Lote,
-      v.EdadCultivo, v.AlturaPlanta, v.Botones, v.Flores,
-      v.Cuajas, v.PreCuajas, v.CuajaDeforme, v.CuajasDañoAlternaria,
-      v.CuajaDañoProdi, v.FrutoNivel1, v.FrutosQuemados, v.FrutosDeformes,
-      v.DeformeLeve, v.TipoAji, v.FormaAji, v.DañoAlternaria,
-      v.DañoProdiplosis, v.FrutosDescompuestos, v.DiametroMenor,
-      v.DañoRoedores, v.DañoPajaros, v.Validacion,
-      v.VI, v.VT, v.M30, v.M50, v.M75,
-      v.P30, v.P50, v.P75, v.VMP30, v.VMP50, v.VMP75,
-      v.PN, v.NP, v.N, v.RM, v.R,
-      v.Craking, v.RajL, v.RajMod, v.RajS,
-      v.DeshL, v.DeshS, v.Virus, v.Trips,
-      v.PudBasal, v.DeficienciaCalcio, v.FrtCC,
-      NULL AS UmbralAltura
-    FROM vw_FenologiaPortalWeb v
-    WHERE v.idTurno = @idTurno
-      AND v.Año = @maxAnio
-      AND v.Semana IN (${semanas.join(',')})
-    ORDER BY v.Semana ASC, v.Lote
-  `);
+    const result = await pool.request()
+      .input('idTurno', sql.Int, idTurno)
+      .input('maxAnio', sql.Int, maxAnio)
+      .query(`
+        SELECT 
+          DATEPART(iso_week, TBL.Fecha) AS Semana,
+          CONVERT(VARCHAR(10), TBL.Fecha, 23) AS Fecha,
+          L.idLote, L.Lote,
+          DATEDIFF(DAY, T.FechaSiembra, TBL.Fecha) AS EdadCultivo,
+          NULL AS UmbralAltura,
+          TBL.AltPlant AS AlturaPlanta,
+          TBL.N_bot AS Botones,
+          TBL.N_Flor AS Flores,
+          TBL.N_Cuajas AS Cuajas,
+          TBL.N_PC AS PreCuajas,
+          TBL.N_CDeforP AS CuajaDeforme,
+          TBL.N_CDA AS CuajasDañoAlternaria,
+          TBL.N_CDP AS CuajaDañoProdi,
+          TBL.N_FrtN1 AS FrutoNivel1,
+          TBL.N_FrtfQ AS FrutosQuemados,
+          TBL.N_FrtFMD AS FrutosDeformes,
+          TBL.N_FrtDeforL AS DeformeLeve,
+          TBL.N_FrtTAPR AS TipoAji,
+          TBL.N_FrtFA AS FormaAji,
+          TBL.N_FrtDA AS DañoAlternaria,
+          TBL.N_FrtDP AS DañoProdiplosis,
+          TBL.N_FrtDescomp AS FrutosDescompuestos,
+          TBL.N_FrtDM AS DiametroMenor,
+          TBL.N_FrtDPR AS DañoRoedores,
+          TBL.N_FrtDPP AS DañoPajaros,
+          TBL.Validacion,
+          C.N_FrtVI AS VI, C.N_FrtVT AS VT,
+          C.N_FrtM30 AS M30, C.N_FrtM50 AS M50, C.N_FrtM75 AS M75,
+          C.N_FrtP30 AS P30, C.N_FrtP50 AS P50, C.N_FrtP75 AS P75,
+          C.N_FrtVMP30 AS VMP30, C.N_FrtVMP50 AS VMP50, C.N_FrtVMP75 AS VMP75,
+          C.N_FrtPN AS PN, C.N_FrtNP AS NP, C.N_FrtN AS N,
+          C.N_FrtRM AS RM, C.N_FrtR AS R,
+          C.N_FrtFC AS Craking, C.N_FrtRL AS RajL, C.N_FrtRajMod AS RajMod, C.N_FrtRS AS RajS,
+          C.N_FrtDeshL AS DeshL, C.N_FrtDS AS DeshS,
+          C.N_FrtFV AS Virus, C.N_FrtDPT AS Trips,
+          C.N_FrtPB AS PudBasal, C.N_FrtDC AS DeficienciaCalcio,
+          (ISNULL(C.N_FrtVI,0)+ISNULL(C.N_FrtVT,0)+ISNULL(C.N_FrtM30,0)+
+           ISNULL(C.N_FrtM50,0)+ISNULL(C.N_FrtM75,0)+ISNULL(C.N_FrtP30,0)+
+           ISNULL(C.N_FrtP50,0)+ISNULL(C.N_FrtP75,0)+ISNULL(C.N_FrtVMP30,0)+
+           ISNULL(C.N_FrtVMP50,0)+ISNULL(C.N_FrtVMP75,0)+ISNULL(C.N_FrtN,0)+
+           ISNULL(C.N_FrtNP,0)+ISNULL(C.N_FrtPN,0)+ISNULL(C.N_FrtR,0)+
+           ISNULL(C.N_FrtRM,0)+ISNULL(C.N_FrtRL,0)+ISNULL(C.N_FrtRajMod,0)+
+           ISNULL(C.N_FrtFC,0)+ISNULL(C.N_FrtDeshL,0)+ISNULL(C.N_FrtDeforL,0)+
+           ISNULL(C.N_FrtTAPR,0)) AS FrtCC
+        FROM TBL_ProyeccionesPimiento TBL
+        INNER JOIN Evaluacion E ON E.idEvaluacion = TBL.IdEvaluacion
+        INNER JOIN Lote L ON L.idLote = TBL.idLote
+        INNER JOIN Turno T ON T.idTurno = L.idTurno
+        LEFT JOIN TBL_ProyeccionesPimiento C 
+          ON C.idLote = TBL.idLote
+          AND DATEPART(iso_week, C.FechaMod) = DATEPART(iso_week, TBL.Fecha)
+          AND YEAR(DATEADD(day, 26 - DATEPART(iso_week, C.FechaMod), C.FechaMod)) = @maxAnio
+          AND C.Validacion = 1
+          AND C.CLASIFICACION = 'Oficial'
+          AND C.IdEvaluacion IN (SELECT idEvaluacion FROM Evaluacion WHERE Evaluacion = 'Conteos')
+        WHERE L.idTurno = @idTurno
+          AND E.Evaluacion = 'Fenologia'
+          AND YEAR(TBL.Fecha) = @maxAnio
+          AND DATEPART(iso_week, TBL.Fecha) IN (${semanas.join(',')})
+          AND TBL.Validacion != 0
+        ORDER BY DATEPART(iso_week, TBL.Fecha) ASC, L.Lote
+      `);
+
     const semanasDatos = semanas.map(numSemana => {
       const datosSemana = result.recordset.filter(r => r.Semana === numSemana);
       const lotes = {};
@@ -210,9 +249,10 @@ async function getDatosTurnoTresSemanas(req, res) {
         validacion: lote.datos[0]?.Validacion || 3
       }));
 
-      const promedioGeneral = calcularPromedios(datosSemana);
+      // Promedio general correcto: promedio de promedios de lote
+      const promedioGeneral = calcularPromedios(lotesConPromedios.map(l => l.promedios));
       const esUltimaSemana = numSemana === semanas[semanas.length - 1];
-      const hayValidacion2 = datosSemana.some(d => d.Validacion === 2|| d.Validacion === 1);
+      const hayValidacion2 = datosSemana.some(d => d.Validacion === 2 || d.Validacion === 1);
 
       return {
         semana: numSemana,
@@ -225,7 +265,7 @@ async function getDatosTurnoTresSemanas(req, res) {
     res.json({ success: true, variedad, modulo, turno, subturno, semanas: semanasDatos });
   } catch (err) {
     console.error('❌ Error al obtener datos turno:', err.message);
-    res.status(500).json({ success: false, error: err.message, stack: err.toString() }); 
+    res.status(500).json({ success: false, error: err.message, stack: err.toString() });
   }
 }
 
@@ -402,8 +442,6 @@ async function editarPromediosLote(req, res) {
     const { idLote } = req.params;
     const { promediosEditados, valoresMin, valoresMax } = req.body;
 
-    console.log('📊 Editando promedios lote:', { idLote, campos: Object.keys(promediosEditados) });
-
     const pool = await getConnection();
 
     const semanaResult = await pool.request()
@@ -472,8 +510,6 @@ async function editarPromediosLote(req, res) {
         INNER JOIN (VALUES ${valoresParaUpdate}) AS v(id, valor)
           ON t.idtablamaestra = v.id
       `);
-
-      console.log(`✅ ${campo}: Distribuido ${muestras.length} valores`);
     }
 
     res.json({ success: true, message: `Promedios actualizados en ${muestras.length} muestras` });
@@ -488,12 +524,8 @@ async function editarPromediosTurno(req, res) {
     const { idTurno } = req.params;
     const { promediosEditados, valoresMin, valoresMax } = req.body;
 
-    console.log('📊 Editando turno:', idTurno);
-    console.log('Promedios recibidos:', promediosEditados);
-
     const pool = await getConnection();
 
-    // Obtener última semana y año
     const semanaGlobalResult = await pool.request()
       .input('idTurno', sql.Int, idTurno)
       .query(`
@@ -512,14 +544,11 @@ async function editarPromediosTurno(req, res) {
       return res.status(404).json({ success: false, error: 'No se encontraron datos' });
     }
 
-    // Verificar si hay AlturaPlanta = 0
     const hayAlturaPlantaCero = Object.values(promediosEditados).some(val => 
       typeof val === 'object' && val.AlturaPlanta && parseFloat(val.AlturaPlanta) === 0
     );
 
     if (hayAlturaPlantaCero) {
-      console.log('⚠️ AlturaPlanta = 0 detectado. Poniendo TODOS los lotes en 0...');
-      
       await pool.request()
         .input('idTurno', sql.Int, idTurno)
         .input('semana', sql.Int, ultimaSemana)
@@ -533,8 +562,6 @@ async function editarPromediosTurno(req, res) {
           AND YEAR(Fecha) = @anio
           AND Validacion != 0
         `);
-      
-      console.log(`✅ AlturaPlanta = 0 aplicado a TODOS los lotes`);
     }
 
     const mapeoColumnas = {
@@ -549,7 +576,6 @@ async function editarPromediosTurno(req, res) {
       DañoRoedores: 'N_FrtDPR', DañoPajaros: 'N_FrtDPP'
     };
 
-    // Actualizar cada lote
     for (const [idLote, promLote] of Object.entries(promediosEditados)) {
       const muestrasResult = await pool.request()
         .input('idLote', sql.Int, parseInt(idLote))
@@ -570,7 +596,7 @@ async function editarPromediosTurno(req, res) {
       if (muestras.length === 0) continue;
 
       for (const [campo, promedio] of Object.entries(promLote)) {
-        if (campo === 'AlturaPlanta' && hayAlturaPlantaCero) continue; // Ya procesado
+        if (campo === 'AlturaPlanta' && hayAlturaPlantaCero) continue;
 
         const prom = parseFloat(promedio);
         const min = valoresMin && valoresMin[campo] ? parseFloat(valoresMin[campo]) : prom * 0.7;
@@ -590,7 +616,6 @@ async function editarPromediosTurno(req, res) {
       }
     }
 
-    // ASEGURAR que TODO el turno quede en Validación = 1
     await pool.request()
       .input('idTurno', sql.Int, idTurno)
       .input('semana', sql.Int, ultimaSemana)
@@ -604,8 +629,6 @@ async function editarPromediosTurno(req, res) {
         AND YEAR(Fecha) = @anio
         AND Validacion != 0
       `);
-
-    console.log(`✅ TODO EL TURNO marcado como Validacion = 1`);
 
     res.json({ success: true, message: 'Turno actualizado correctamente' });
   } catch (err) {
@@ -666,7 +689,11 @@ function calcularPromedios(datos) {
     'CuajaDeforme', 'CuajasDañoAlternaria', 'CuajaDañoProdi',
     'FrutoNivel1', 'FrutosQuemados', 'FrutosDeformes', 'DeformeLeve',
     'TipoAji', 'FormaAji', 'DañoAlternaria', 'DañoProdiplosis',
-    'FrutosDescompuestos', 'DiametroMenor', 'DañoRoedores', 'DañoPajaros'
+    'FrutosDescompuestos', 'DiametroMenor', 'DañoRoedores', 'DañoPajaros',
+    'VI', 'VT', 'M30', 'M50', 'M75', 'P30', 'P50', 'P75',
+    'VMP30', 'VMP50', 'VMP75', 'PN', 'NP', 'N', 'RM', 'R',
+    'Craking', 'RajL', 'RajMod', 'RajS', 'DeshL', 'DeshS',
+    'Virus', 'Trips', 'PudBasal', 'DeficienciaCalcio', 'FrtCC'
   ];
 
   const promedios = {};
@@ -709,7 +736,6 @@ function distribuirValores(cantidad, promedio, min, max, esDecimal) {
 
   return valores.map(v => esDecimal ? Math.round(v * 10) / 10 : Math.round(v));
 }
-
 
 module.exports = {
   getFundos,
